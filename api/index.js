@@ -1,5 +1,5 @@
 // ==========================================
-// 📺 NETFLIX PROXY - VERCEL RAW BODY
+// 📺 NETFLIX PROXY - VERCEL RAW BODY)
 // ==========================================
 
 // 🔥 IMPORTANT: bodyParser: false in vercel.json
