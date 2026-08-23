@@ -1,59 +1,96 @@
 // ==========================================
-// 📺 NETFLIX PROXY - FIXED
+// 📺 NETFLIX PROXY - COMPLETE
 // ==========================================
 
 // ==========================================
-// 🔒 NETFLIX CONFIG
+// 🔒 HARD-CODED DEVICE DETAILS (Capture se)
 // ==========================================
-const NETFLIX_CONFIG = {
-    baseUrls: [
-        'https://android.prod.ftl.netflix.com',
-        'https://android.prod.cloud.netflix.com',
-        'https://logs.netflix.com',
-        'https://sessions.bugsnag.com',
-        'https://occ-0-4409-3647.1.nflxso.net'
-    ],
-    
+const HARD_CODED = {
+    // 🔥 ESN - Most Important
     esn: 'NFANDROID1-PXA-P-SAMSUSM-S928B-31506-0202JA72A3JBBA23MNJ42U6INDEUFEFAPKANFOJ04A8UI04N1SJMO7JR6JMQ6QLOP60A3ICK060L3UAQ5AD2BL0M0IILPEP1TNL48D29',
-    esnPrefix: 'NFANDROID1-PRV-P-',
+    
+    // 🔥 Session ID
     sessionId: '730199105',
-    nrdSessionId: '730199105',
     
-    deviceModel: 'samsung_SM-S928B',
-    osVersion: '36',
-    appVersion: '9.22.1',
-    uiVersion: 'release/9.22 (3) 62948',
-    androidApi: '36',
-    
+    // 🔥 Profile GUID
     profileGuid: 'WZFVPUH3OFDT3OOGEQJJF7H5HY',
+    
+    // 🔥 Netflix ID
     netflixId: 'v%3D3%26ct%3DBgjHlOvcAxLvA1fFbbVVP2BLO1RUfJPX9VgXjSqVsl8hYsWHuYJgk8hnYYmKfCcOSfVKg-rwRR8j9fvvfbcJaONasT5Y2bWhz2vTs5a9zge3HUTTA2CAa2geeUJ9izVsxZeWvgm3wZWXOPUMsXqu84LXweGoMtDNf1zOz1TTmHEoYibyHlLvV8AcFBBhPh19SPLtBHaaEJOF3rAJg2Lvy5M5LZuDx5wK0jYmt4zP9drtl4NAUxohaJqNKU0WAZh_CTuAzRIO8dfQiOMQtMOJP9uwceQIZ1HsxDYhT-5JXk8R_wNI6sAz-OUXK2vh2PcdL-AGJ0kqdgLHhMNQloPC2Mkf30DE13lOvqEscD76rOsnPcdEuo1JCHSfXLUXeeTEEnzJTMxSTq1FhaTV98uJ8LqKvYvc8L7FpbUyCVZYVWceSl_38PUYf3quPuY0U-qiWTC4U9N7SgwZAjQGrT_Q0Esi07E2kkGPpcCBwG_ewwPtbXpF7pCv8njDArE2-IH95g8j3YHpq1DzXG_CQ-EejEQ0jV1T_eyWB0EwkfdZImwLZMKLJnaBUzJubeFQma_2EcE6IiVIvaNf7Vvo3jipYXCEz7LcMn0_Cb4-41ZqUL9TN87YLdbq3eDh-XoiQt2XN5mWcIGac7zhq0sWkdOh2JUqsWdJr3LGsRgGIg4KDDK18dLxoZ-z8m5iWQ..%26pg%3DWZFVPUH3OFDT3OOGEQJJF7H5HY%26ch%3DAQEAEAABABRUKLhTiZiZ7sXvi6EbLE_qy_k-HQHYz_M.',
+    
     secureNetflixId: 'v%3D3%26mac%3DAQEAEQABABRUT3TscZcN3w4ozZ5srttAVkA8IqEvU5I.%26dt%3D1787458611964',
     
-    cookies: {
-        nfvdid: 'BQFmAAEBEIxpfZGgi1LCTmydVUjRImpgznEq92nK9jNTxAbAsFGlE-dcUcUgUKmZy-RB2pTWTBhHROhKpep-dCFDDZUrAIWHAqWPfQpxSmXaqkGHK_AmL27RhB5q9SWMLIj7KKX91YYx6BtKoYy0vxbTUWBd8--D',
-        flwssn: 'db673be0-e6a1-4346-8c01-b061caaf8bdd'
+    nfvdid: 'BQFmAAEBEIxpfZGgi1LCTmydVUjRImpgznEq92nK9jNTxAbAsFGlE-dcUcUgUKmZy-RB2pTWTBhHROhKpep-dCFDDZUrAIWHAqWPfQpxSmXaqkGHK_AmL27RhB5q9SWMLIj7KKX91YYx6BtKoYy0vxbTUWBd8--D',
+    
+    flwssn: 'db673be0-e6a1-4346-8c01-b061caaf8bdd',
+    
+    // 🔥 Device Details
+    device: {
+        model: 'samsung_SM-S928B',
+        osVersion: '36',
+        appVersion: '9.22.1',
+        uiFlavor: 'android',
+        formFactor: 'phone',
+        androidApi: '36',
+        deviceMemoryLevel: 'HIGH',
+        esnPrefix: 'NFANDROID1-PRV-P-',
+        installerSource: 'com.google.android.packageinstaller'
     },
     
-    userAgent: 'com.netflix.mediaclient/62948 (Linux; U; Android 16; en_GB; SM-S928B; Build/BP4A.251205.006; Cronet/119.0.6045.31)',
-    fakeIP: '223.188.42.214',
-    branding: '@Netflix Premium'
+    // 🔥 Branding
+    branding: '@Netflix Premium',
+    
+    // 🔥 IP Masking
+    fakeIP: '223.188.42.214'
 };
+
+// ==========================================
+// 🚫 BLOCKED ENDPOINTS - Netflix specific
+// ==========================================
+const BLOCKED_ENDPOINTS = [
+    // Logout
+    '/logout', '/signout', '/deactivate',
+    '/api/logout', '/auth/logout',
+    
+    // Account/Profile edit
+    '/account', '/profile/edit', '/updateProfile',
+    '/changePassword', '/updateEmail',
+    
+    // Settings
+    '/settings', '/preferences', '/userSettings'
+];
+
+// ==========================================
+// 🚫 BLOCK TRACKING/ANALYTICS
+// ==========================================
+const BLOCKED_PATTERNS = [
+    '/logs.netflix.com',
+    '/log/android/cl',
+    '/logblob',
+    '/bugsnag',
+    '/sessions.bugsnag',
+    '/clevertap',
+    '/appsflyer',
+    '/branch.io',
+    '/firebase',
+    '/analytics'
+];
 
 // ==========================================
 // 🏷️ BRANDING FUNCTION
 // ==========================================
 const addBranding = (obj) => {
-    const tag = ` [${NETFLIX_CONFIG.branding}]`;
+    const tag = ` [${HARD_CODED.branding}]`;
     const targetKeys = [
-        'title', 'name', 'display_name', 'username', 'nickname',
+        'title', 'name', 'displayName', 'username', 'nickname',
         'text', 'label', 'heading', 'description', 'subtitle',
-        'videoTitle', 'movieTitle', 'seriesTitle', 'showTitle'
+        'showTitle', 'movieTitle', 'seriesTitle'
     ];
     
     if (typeof obj === 'object' && obj !== null) {
         for (let key in obj) {
             if (typeof obj[key] === 'string' && targetKeys.includes(key)) {
-                if (!obj[key].includes(NETFLIX_CONFIG.branding)) {
+                if (!obj[key].includes(HARD_CODED.branding)) {
                     obj[key] = obj[key].trim() + tag;
                 }
             } else if (typeof obj[key] === 'object') {
@@ -64,23 +101,76 @@ const addBranding = (obj) => {
 };
 
 // ==========================================
-// 🚫 BLOCKED ENDPOINTS - SAB BLOCK
+// 🎯 VIP SPOOF - Netflix Premium
 // ==========================================
-const BLOCKED_EXACT = [
-    '/log/android/cl/2',
-    '/log/android/logblob/1',
-    '/sessions.bugsnag.com',
-    'logs.netflix.com/log',
-    'bugsnag.com'
-];
+const spoofVIP = (data) => {
+    if (!data || typeof data !== 'object') return data;
+    
+    // Account mein premium add
+    if (data.data && data.data.currentAccount) {
+        const account = data.data.currentAccount;
+        account.plan = 'premium';
+        account.planName = 'Netflix Premium UHD';
+        account.subscriptionStatus = 'active';
+        account.isTrial = false;
+        account.canWatch4K = true;
+        account.canWatchHDR = true;
+        account.screens = 4;
+    }
+    
+    if (data.data && data.data.currentProfile) {
+        const profile = data.data.currentProfile;
+        profile.canEdit = false;
+        profile.canDelete = false;
+        profile.canSwitch = true;
+    }
+    
+    return data;
+};
 
-const BLOCKED_PATTERNS = [
-    'logs.netflix.com',
-    'bugsnag',
-    'session.bugsnag',
-    'log/android/cl',
-    'log/android/logblob'
-];
+// ==========================================
+// 🛡️ BUILD HEADERS
+// ==========================================
+function buildHeaders(req) {
+    const headers = {};
+    
+    if (req.headers) {
+        Object.keys(req.headers).forEach(key => {
+            if (!['accept-encoding', 'content-length', 'host', 'connection',
+                  'cookie', 'x-netflix.esn', 'x-netflix.session.id',
+                  'x-netflix.client.current-profile-guid'].includes(key.toLowerCase())) {
+                headers[key] = req.headers[key];
+            }
+        });
+    }
+    
+    // 🔥 Hard-coded Netflix Headers
+    headers['x-netflix.esn'] = HARD_CODED.esn;
+    headers['x-netflix.session.id'] = HARD_CODED.sessionId;
+    headers['x-netflix.client.current-profile-guid'] = HARD_CODED.profileGuid;
+    headers['x-netflix.context.os-version'] = HARD_CODED.device.osVersion;
+    headers['x-netflix.context.app-version'] = HARD_CODED.device.appVersion;
+    headers['x-netflix.context.ui-flavor'] = HARD_CODED.device.uiFlavor;
+    headers['x-netflix.context.form-factor'] = HARD_CODED.device.formFactor;
+    headers['x-netflix.androidapi'] = HARD_CODED.device.androidApi;
+    headers['x-netflix.devicememorylevel'] = HARD_CODED.device.deviceMemoryLevel;
+    headers['x-netflix.esnprefix'] = HARD_CODED.device.esnPrefix;
+    headers['x-netflix.context.android.installer-source'] = HARD_CODED.device.installerSource;
+    headers['x-netflix.appver'] = HARD_CODED.device.appVersion;
+    
+    // 🔥 Cookies
+    headers['cookie'] = `nfvdid=${HARD_CODED.nfvdid}; flwssn=${HARD_CODED.flwssn}; NetflixId=${HARD_CODED.netflixId}; SecureNetflixId=${HARD_CODED.secureNetflixId}`;
+    
+    // 🔥 IP Masking
+    headers['x-forwarded-for'] = HARD_CODED.fakeIP;
+    headers['x-real-ip'] = HARD_CODED.fakeIP;
+    
+    // 🔥 Content
+    headers['accept'] = 'application/json';
+    headers['content-type'] = 'application/json';
+    
+    return headers;
+}
 
 // ==========================================
 // 🚀 MAIN HANDLER
@@ -99,28 +189,40 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // 🚫 COMPLETE BLOCK - SAB KUCH BLOCK
+    // 🚫 BLOCK LOGOUT + ACCOUNT + SETTINGS
     // ==========================================
-    const isBlocked = BLOCKED_EXACT.some(e => cleanPath.includes(e)) || 
-                      BLOCKED_PATTERNS.some(p => cleanPath.includes(p));
-    
-    if (isBlocked) {
-        console.log(`🚫 BLOCKED: ${cleanPath}`);
-        
-        // 🔥 Sirf 200 OK bhejo, kuch data nahi
-        return res.status(200).send('');
+    if (BLOCKED_ENDPOINTS.some(e => cleanPath.includes(e))) {
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                message: 'This action is not available.'
+            }
+        });
+    }
+
+    // ==========================================
+    // 🚫 BLOCK LOGS/ANALYTICS
+    // ==========================================
+    if (BLOCKED_PATTERNS.some(p => cleanPath.includes(p))) {
+        return res.status(200).json({ status: 'success' });
     }
 
     // ==========================================
     // 🔄 DETERMINE TARGET URL
     // ==========================================
     let targetUrl;
-    if (cleanPath.includes('occ-0-4409-3647.1.nflxso.net')) {
-        targetUrl = 'https://occ-0-4409-3647.1.nflxso.net' + urlPath;
+    if (cleanPath.includes('android.prod.ftl.netflix.com')) {
+        targetUrl = 'https://android.prod.ftl.netflix.com' + urlPath;
     } else if (cleanPath.includes('android.prod.cloud.netflix.com')) {
         targetUrl = 'https://android.prod.cloud.netflix.com' + urlPath;
-    } else if (cleanPath.includes('ftl.netflix.com')) {
-        targetUrl = 'https://android.prod.ftl.netflix.com' + urlPath;
+    } else if (cleanPath.includes('nrdp.ws.ale.netflix.com')) {
+        return res.status(200).json({ status: 'success' });
+    } else if (cleanPath.includes('push.prod.netflix.com')) {
+        return res.status(200).json({ status: 'success' });
+    } else if (cleanPath.includes('occ-0-4409-3647.1.nflxso.net')) {
+        targetUrl = 'https://occ-0-4409-3647.1.nflxso.net' + urlPath;
+    } else if (cleanPath.includes('logs.netflix.com')) {
+        return res.status(200).json({ status: 'success' });
     } else {
         targetUrl = 'https://android.prod.ftl.netflix.com' + urlPath;
     }
@@ -128,45 +230,7 @@ export default async function handler(req, res) {
     // ==========================================
     // 📝 BUILD HEADERS
     // ==========================================
-    const headers = {};
-    
-    // 🔥 Essential headers from original
-    if (req.headers) {
-        const keepHeaders = ['content-type', 'accept', 'x-netflix-', 'x-apollo-', 'x-netflix'];
-        Object.keys(req.headers).forEach(key => {
-            if (keepHeaders.some(k => key.toLowerCase().includes(k.toLowerCase()))) {
-                headers[key] = req.headers[key];
-            }
-        });
-    }
-    
-    // 🔥 Inject Netflix Headers
-    headers['x-netflix.esn'] = NETFLIX_CONFIG.esn;
-    headers['x-netflix.esnprefix'] = NETFLIX_CONFIG.esnPrefix;
-    headers['x-netflix.session.id'] = NETFLIX_CONFIG.sessionId;
-    headers['x-netflix.context.os-version'] = NETFLIX_CONFIG.osVersion;
-    headers['x-netflix.context.app-version'] = NETFLIX_CONFIG.appVersion;
-    headers['x-netflix.androidapi'] = NETFLIX_CONFIG.androidApi;
-    headers['x-netflix.appver'] = NETFLIX_CONFIG.appVersion;
-    headers['user-agent'] = NETFLIX_CONFIG.userAgent;
-    
-    // Profile headers
-    if (!cleanPath.includes('login') && !cleanPath.includes('signup')) {
-        headers['x-netflix.client.current-profile-guid'] = NETFLIX_CONFIG.profileGuid;
-    }
-    
-    // IP Masking
-    headers['x-forwarded-for'] = NETFLIX_CONFIG.fakeIP;
-    headers['x-real-ip'] = NETFLIX_CONFIG.fakeIP;
-    
-    // Cookies
-    headers['cookie'] = `nfvdid=${NETFLIX_CONFIG.cookies.nfvdid}; flwssn=${NETFLIX_CONFIG.cookies.flwssn}; NetflixId=${NETFLIX_CONFIG.netflixId}; SecureNetflixId=${NETFLIX_CONFIG.secureNetflixId}`;
-    
-    // Remove problematic headers
-    delete headers['accept-encoding'];
-    delete headers['content-length'];
-    delete headers['host'];
-    delete headers['connection'];
+    const headers = buildHeaders(req);
 
     // ==========================================
     // 🚀 FORWARD REQUEST
@@ -210,6 +274,7 @@ export default async function handler(req, res) {
         }
 
         if (isJson && data) {
+            data = spoofVIP(data);
             addBranding(data);
             return res.status(response.status).json(data);
         } else {
