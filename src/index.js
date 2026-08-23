@@ -1,23 +1,16 @@
 // ==========================================
-// 📺 NETFLIX PROXY - CLOUDFLARE WORKERS
+// 📺 NETFLIX PROXY - FIXED
 // ==========================================
 
 // ==========================================
-// 🔒 HARD-CODED DEVICE DETAILS (Capture se)
+// 🔒 HARD-CODED DEVICE DETAILS
 // ==========================================
 const HARD_CODED = {
-    // 🔥 ESN (Device ID)
     esn: 'NFANDROID1-PXA-P-SAMSUSM-S928B-31506-0202JA72A3JBBA23MNJ42U6INDEUFEFAPKANFOJ04A8UI04N1SJMO7JR6JMQ6QLOP60A3ICK060L3UAQ5AD2BL0M0IILPEP1TNL48D29',
     esnPrefix: 'NFANDROID1-PRV-P-',
-    
-    // 🔥 Session
     sessionId: '730199105',
     nfvdid: 'BQFmAAEBEIxpfZGgi1LCTmydVUjRImpgznEq92nK9jNTxAbAsFGlE-dcUcUgUKmZy-RB2pTWTBhHROhKpep-dCFDDZUrAIWHAqWPfQpxSmXaqkGHK_AmL27RhB5q9SWMLIj7KKX91YYx6BtKoYy0vxbTUWBd8--D',
-    
-    // 🔥 Profile
     profileGuid: 'WZFVPUH3OFDT3OOGEQJJF7H5HY',
-    
-    // 🔥 Device Details
     deviceInfo: {
         model: 'samsung_SM-S928B',
         osVersion: '36',
@@ -29,37 +22,27 @@ const HARD_CODED = {
         deviceMemoryLevel: 'HIGH',
         locale: 'en-IN'
     },
-    
-    // 🔥 User Agent
     userAgent: 'com.netflix.mediaclient/62948 (Linux; U; Android 16; en_GB; SM-S928B; Build/BP4A.251205.006; Cronet/119.0.6045.31)',
-    
-    // 🔥 Branding
     branding: '@Netflix Premium',
-    
-    // 🔥 IP Masking
     fakeIP: '122.168.2.40'
 };
 
 // ==========================================
-// 🚫 BLOCKED ENDPOINTS
+// 🚫 BLOCKED DOMAINS & PATTERNS
 // ==========================================
-const BLOCKED_PATTERNS = [
-    // Logout/Delete
+const BLOCKED_DOMAINS = [
+    'logs.netflix.com',
+    'sessions.bugsnag.com',
+    'bugsnag.com',
+    'clevertap.com',
+    'appsflyer.com',
+    'branch.io',
+    'firebase'
+];
+
+const BLOCKED_PATHS = [
     '/logout', '/delete', '/deactivate', '/unregister',
-    '/signout', '/sign_out', '/deactivateDevice',
-    
-    // Analytics/Logging (Block but return 200)
-    '/logs.netflix.com',
-    '/log/android/cl',
-    '/log/android/logblob',
-    '/sessions.bugsnag.com',
-    '/bugsnag',
-    '/clevertap',
-    '/appsflyer',
-    '/branch.io',
-    '/firebase',
-    '/analytics', '/track', '/log', '/heartbeat',
-    '/impression', '/sync', '/event'
+    '/signout', '/sign_out', '/deactivateDevice'
 ];
 
 // ==========================================
@@ -72,7 +55,8 @@ function addBranding(obj) {
     const targetKeys = [
         'title', 'name', 'display_name', 'username', 'nickname',
         'text', 'label', 'heading', 'description', 'subtitle',
-        'videoTitle', 'showTitle', 'movieTitle', 'seriesTitle'
+        'videoTitle', 'showTitle', 'movieTitle', 'seriesTitle',
+        'synopsis', 'summary'
     ];
     
     if (Array.isArray(obj)) {
@@ -97,7 +81,7 @@ function addBranding(obj) {
 function spoofVIP(data) {
     if (!data || typeof data !== 'object') return data;
     
-    // Account query response mein subscription add
+    // Account subscription spoof
     if (data.data?.currentUser?.account) {
         const account = data.data.currentUser.account;
         account.subscriptionStatus = 'active';
@@ -109,7 +93,7 @@ function spoofVIP(data) {
         account.canDelete = false;
     }
     
-    // Profiles mein sirf ek rakhna hai
+    // Profiles - sirf ek rakhna hai
     if (data.data?.currentUser?.account?.profiles) {
         const profiles = data.data.currentUser.account.profiles;
         if (Array.isArray(profiles) && profiles.length > 1) {
@@ -117,6 +101,14 @@ function spoofVIP(data) {
                 p.guid === HARD_CODED.profileGuid
             );
         }
+    }
+    
+    // Streaming quality unlock
+    if (data.data?.video) {
+        data.data.video.maxQuality = '4K';
+        data.data.video.hdr = true;
+        data.data.video.dolbyAtmos = true;
+        data.data.video.downloadEnabled = true;
     }
     
     return data;
@@ -128,8 +120,8 @@ function spoofVIP(data) {
 function buildHeaders(request) {
     const headers = new Headers();
     
-    // 🔥 Original headers copy (sirf zaroori)
-    const essentialOriginal = ['content-type', 'accept', 'accept-encoding'];
+    // Original headers copy (sirf zaroori)
+    const essentialOriginal = ['content-type', 'accept'];
     for (const key of essentialOriginal) {
         const value = request.headers.get(key);
         if (value) {
@@ -154,7 +146,7 @@ function buildHeaders(request) {
     headers.set('x-netflix.zuul.brotli.allowed', 'true');
     headers.set('user-agent', HARD_CODED.userAgent);
     
-    // 🔥 Cookies
+    // Cookies
     const cookies = [
         `nfvdid=${HARD_CODED.nfvdid}`,
         `flwssn=db673be0-e6a1-4346-8c01-b061caaf8bdd`,
@@ -163,7 +155,7 @@ function buildHeaders(request) {
     ];
     headers.set('cookie', cookies.join('; '));
     
-    // 🔥 IP Masking
+    // IP Masking
     headers.set('x-forwarded-for', HARD_CODED.fakeIP);
     headers.set('x-real-ip', HARD_CODED.fakeIP);
     
@@ -176,61 +168,80 @@ function buildHeaders(request) {
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
+        const hostname = url.hostname;
         const path = url.pathname;
         const method = request.method;
         
         // ==========================================
-        // 🚫 BLOCK LOGOUT/ANALYTICS
+        // 🚫 BLOCK LOGS & ANALYTICS
         // ==========================================
-        const isBlocked = BLOCKED_PATTERNS.some(pattern => 
-            path.includes(pattern) || url.hostname.includes(pattern)
+        const isBlockedDomain = BLOCKED_DOMAINS.some(domain => 
+            hostname.includes(domain)
         );
         
-        if (isBlocked) {
+        const isBlockedPath = BLOCKED_PATHS.some(pattern => 
+            path.includes(pattern)
+        );
+        
+        if (isBlockedDomain || isBlockedPath) {
+            console.log(`🚫 Blocked: ${hostname}${path}`);
+            
+            // Logs ke liye 200 OK return
+            if (hostname.includes('logs.netflix.com')) {
+                return new Response(null, { 
+                    status: 200,
+                    headers: {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Length': '0'
+                    }
+                });
+            }
+            
             return new Response(JSON.stringify({
                 status: true,
                 message: "Blocked for security"
             }), {
                 status: 200,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             });
         }
         
         // ==========================================
-        // 🔄 DETERMINE TARGET
+        // 🔄 DETERMINE TARGET URL
         // ==========================================
         let targetUrl;
-        const host = url.hostname;
         
-        if (host.includes('logs.netflix.com')) {
-            // Logs - block kar rahe hain already
-            return new Response('OK', { status: 200 });
-        } else if (host.includes('android.prod.ftl.netflix.com')) {
-            targetUrl = `https://android.prod.ftl.netflix.com${path}${url.search}`;
-        } else if (host.includes('android.prod.cloud.netflix.com')) {
-            targetUrl = `https://android.prod.cloud.netflix.com${path}${url.search}`;
-        } else if (host.includes('occ-0-') || host.includes('nflxso.net')) {
-            targetUrl = `https://${host}${path}${url.search}`;
-        } else if (host.includes('nrdp.ws.ale.netflix.com')) {
-            // WebSocket - pass through
-            return fetch(request);
-        } else if (host.includes('push.prod.netflix.com')) {
-            // WebSocket - pass through
-            return fetch(request);
+        // Agar request already proxy par aa rahi hai toh original domain use karo
+        if (hostname === 'netflix-proxy.ansarirose163.workers.dev') {
+            // Request ka original host header check karo
+            const originalHost = request.headers.get('x-original-host') || 'android.prod.cloud.netflix.com';
+            targetUrl = `https://${originalHost}${path}${url.search}`;
         } else {
-            // Default - pass through
-            return fetch(request);
+            // Direct request - forward as is
+            targetUrl = `https://${hostname}${path}${url.search}`;
         }
+        
+        console.log(`🔄 Forward: ${method} ${targetUrl}`);
         
         // ==========================================
         // 📝 BUILD HEADERS
         // ==========================================
         const headers = buildHeaders(request);
         
-        // 🔥 Body handle
+        // Original host save karo for proxy routing
+        headers.set('x-original-host', hostname);
+        
+        // Body handle
         let body = null;
         if (method !== 'GET' && method !== 'HEAD') {
-            body = await request.arrayBuffer();
+            try {
+                body = await request.arrayBuffer();
+            } catch (e) {
+                // No body
+            }
         }
         
         // ==========================================
@@ -249,23 +260,27 @@ export default {
             
             // Agar JSON hai toh process karo
             if (contentType.includes('application/json')) {
-                let jsonData = JSON.parse(new TextDecoder().decode(responseData));
-                
-                // 🎯 VIP Spoof
-                jsonData = spoofVIP(jsonData);
-                
-                // 🏷️ Branding Add
-                jsonData = addBranding(jsonData);
-                
-                return new Response(JSON.stringify(jsonData), {
-                    status: response.status,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*',
-                        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                        'Access-Control-Allow-Headers': '*'
-                    }
-                });
+                try {
+                    let jsonData = JSON.parse(new TextDecoder().decode(responseData));
+                    
+                    // 🎯 VIP Spoof
+                    jsonData = spoofVIP(jsonData);
+                    
+                    // 🏷️ Branding Add
+                    jsonData = addBranding(jsonData);
+                    
+                    return new Response(JSON.stringify(jsonData), {
+                        status: response.status,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*',
+                            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                            'Access-Control-Allow-Headers': '*'
+                        }
+                    });
+                } catch (e) {
+                    // JSON parse fail - return as is
+                }
             }
             
             // Non-JSON response
@@ -281,12 +296,16 @@ export default {
             });
             
         } catch (error) {
+            console.error('❌ Error:', error);
             return new Response(JSON.stringify({
                 status: false,
                 error: 'Proxy Error: ' + error.message
             }), {
                 status: 500,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             });
         }
     }
