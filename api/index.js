@@ -68,6 +68,10 @@ const BLOCKED_PATTERNS = [
 // ==========================================
 // 🚀 MAIN HANDLER
 // ==========================================
+
+    // ==========================================
+// 🚀 MAIN HANDLER (FIXED)
+// ==========================================
 export default async function handler(req, res) {
     let urlPath = req.headers['x-invoke-path'] || req.url;
     const cleanPath = urlPath.split('?')[0];
@@ -83,10 +87,13 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // 🚫 BLOCK LOGS/ANALYTICS
+    // 🚫 BLOCK LOGS/ANALYTICS/WEBSOCKET
     // ==========================================
     if (BLOCKED_PATTERNS.some(p => cleanPath.includes(p))) {
-        return res.status(200).json({ status: true });
+        return res.status(200).json({ 
+            status: true,
+            data: {} 
+        });
     }
 
     // ==========================================
@@ -109,44 +116,40 @@ export default async function handler(req, res) {
     // ==========================================
     // 📝 BUILD HEADERS
     // ==========================================
-    const headers = {};
+    const headers = { ...req.headers };
     
-    // 🔥 Copy only essential headers from original
-    const essentialHeaders = [
-        'x-netflix.clienttype', 'x-netflix.appver', 'x-netflix.esnprefix',
-        'x-netflix.androidapi', 'x-netflix.deviceformfactor', 
-        'x-netflix.devicememorylevel', 'x-netflix.request.attempt',
-        'x-netflix.request.id', 'x-netflix.request.uuid',
-        'x-netflix.client.request.name', 'x-netflix.request.routing',
-        'content-type', 'content-encoding', 'user-agent',
-        'cookie', 'x-netflix.zuul.brotli.allowed'
-    ];
-    
-    essentialHeaders.forEach(key => {
-        if (req.headers[key]) {
-            headers[key] = req.headers[key];
-        }
-    });
-    
-    // 🔥 Override with hard-coded values
     headers['x-netflix.esn'] = NETFLIX_CONFIG.esn;
+    headers['x-netflix.esnprefix'] = NETFLIX_CONFIG.esnPrefix;
     headers['x-netflix.session.id'] = NETFLIX_CONFIG.sessionId;
+    headers['x-netflix.androidapi'] = NETFLIX_CONFIG.androidApi;
+    headers['x-netflix.appver'] = NETFLIX_CONFIG.appVer;
     headers['x-netflix.context.app-version'] = NETFLIX_CONFIG.appVersion;
     headers['x-netflix.context.os-version'] = NETFLIX_CONFIG.osVersion;
-    headers['x-netflix.androidapi'] = NETFLIX_CONFIG.androidApi;
-    headers['x-netflix.client.current-profile-guid'] = NETFLIX_CONFIG.profileGuid;
+    headers['x-netflix.deviceformfactor'] = 'PHONE';
+    headers['x-netflix.devicememorylevel'] = 'HIGH';
     headers['user-agent'] = NETFLIX_CONFIG.userAgent;
     headers['x-forwarded-for'] = NETFLIX_CONFIG.fakeIP;
     headers['x-real-ip'] = NETFLIX_CONFIG.fakeIP;
     
-    // Remove problematic headers
+    if (NETFLIX_CONFIG.profileGuid) {
+        headers['x-netflix.client.current-profile-guid'] = NETFLIX_CONFIG.profileGuid;
+    }
+    
+    const cookies = [
+        `nfvdid=${NETFLIX_CONFIG.nfvdid}`,
+        `flwssn=db673be0-e6a1-4346-8c01-b061caaf8bdd`,
+        `NetflixId=${NETFLIX_CONFIG.netflixId}`,
+        `SecureNetflixId=${NETFLIX_CONFIG.secureNetflixId}`
+    ];
+    headers['cookie'] = cookies.join('; ');
+    
     delete headers['accept-encoding'];
     delete headers['content-length'];
     delete headers['host'];
     delete headers['connection'];
 
     // ==========================================
-    // 🚀 FORWARD REQUEST - WITH BINARY BODY SUPPORT
+    // 🚀 FORWARD REQUEST (FIXED)
     // ==========================================
     try {
         const fetchOptions = {
@@ -154,50 +157,68 @@ export default async function handler(req, res) {
             headers: headers,
         };
 
-        // 🔥 Handle binary body (msl_v1 encoded)
-        if (method !== 'GET' && method !== 'HEAD') {
-            if (req.body) {
-                // Agar req.body already buffer hai toh direct use karo
-                if (Buffer.isBuffer(req.body)) {
-                    fetchOptions.body = req.body;
-                } 
-                // Agar string hai toh
-                else if (typeof req.body === 'string') {
-                    fetchOptions.body = req.body;
-                } 
-                // Agar object hai toh JSON.stringify
-                else if (typeof req.body === 'object') {
-                    fetchOptions.body = JSON.stringify(req.body);
-                }
+        if (method !== 'GET' && method !== 'HEAD' && req.body) {
+            if (typeof req.body === 'string') {
+                fetchOptions.body = req.body;
+            } else if (Buffer.isBuffer(req.body)) {
+                fetchOptions.body = req.body;
+            } else if (typeof req.body === 'object') {
+                fetchOptions.body = JSON.stringify(req.body);
             }
         }
 
         console.log(`🔄 ${method} ${targetUrl}`);
-        console.log(`📦 Headers:`, Object.keys(headers).join(', '));
 
         const response = await fetch(targetUrl, fetchOptions);
         const contentType = response.headers.get('content-type') || '';
         
-        // 🔥 Handle response - pehle buffer mein lo
-        const responseBuffer = Buffer.from(await response.arrayBuffer());
-        
-        // Try to parse as JSON if possible
-        try {
-            const responseText = responseBuffer.toString('utf8');
-            const data = JSON.parse(responseText);
-            
-            // Branding add karo
-            addBranding(data);
-            
-            return res.status(response.status).json(data);
-        } catch (e) {
-            // JSON nahi hai - raw binary/msl response
+        // ✅ FIX: Handle empty responses
+        if (response.status === 204 || response.status === 304) {
+            return res.status(response.status).end();
+        }
+
+        const responseText = await response.text();
+
+        // ✅ FIX: Check if response is empty
+        if (!responseText || responseText.trim() === '') {
+            return res.status(response.status).json({ 
+                status: true,
+                data: {} 
+            });
+        }
+
+        // ✅ FIX: Check content-type BEFORE parsing
+        const isJsonResponse = contentType.includes('application/json') || 
+                               responseText.trim().startsWith('{') || 
+                               responseText.trim().startsWith('[');
+
+        if (isJsonResponse) {
+            try {
+                let data = JSON.parse(responseText);
+                
+                // ✅ FIX: Safely add branding with error handling
+                try {
+                    if (data && typeof data === 'object') {
+                        addBranding(data);
+                    }
+                } catch (brandingError) {
+                    console.warn('⚠️ Branding error:', brandingError.message);
+                    // Continue anyway, don't fail
+                }
+                
+                return res.status(response.status).json(data);
+            } catch (parseError) {
+                console.error('❌ JSON Parse Error:', parseError, 'Text:', responseText.substring(0, 200));
+                return res.status(response.status).send(responseText);
+            }
+        } else {
+            // Non-JSON response (video, image, etc.)
             response.headers.forEach((value, key) => {
                 if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
                     res.setHeader(key, value);
                 }
             });
-            return res.status(response.status).send(responseBuffer);
+            return res.status(response.status).send(responseText);
         }
 
     } catch (error) {
