@@ -6,21 +6,11 @@
 // 🔒 HARD-CODED CONFIG (Capture se)
 // ==========================================
 const CONFIG = {
-    // 🔥 Base URLs
-    baseUrls: {
-        'logs.netflix.com': 'https://logs.netflix.com',
-        'android.prod.ftl.netflix.com': 'https://android.prod.ftl.netflix.com',
-        'android.prod.cloud.netflix.com': 'https://android.prod.cloud.netflix.com',
-        'occ-0-4409-3647.1.nflxso.net': 'https://occ-0-4409-3647.1.nflxso.net',
-        'sessions.bugsnag.com': 'https://sessions.bugsnag.com'
-    },
-    
     // 🔥 Device Details
     device: {
         esn: 'NFANDROID1-PXA-P-SAMSUSM-S928B-31506-0202JA72A3JBBA23MNJ42U6INDEUFEFAPKANFOJ04A8UI04N1SJMO7JR6JMQ6QLOP60A3ICK060L3UAQ5AD2BL0M0IILPEP1TNL48D29',
         esnPrefix: 'NFANDROID1-PRV-P-',
         sessionId: '730199105',
-        model: 'SM-S928B',
         osVersion: '36',
         appVersion: '9.22.1',
         androidApi: '36',
@@ -104,7 +94,7 @@ function buildHeaders(req) {
     const headers = {};
     
     // Original essential headers
-    const essential = ['content-type', 'accept', 'accept-charset', 'content-encoding'];
+    const essential = ['content-type', 'accept', 'accept-charset'];
     for (const key of essential) {
         if (req.headers[key]) {
             headers[key] = req.headers[key];
@@ -112,7 +102,6 @@ function buildHeaders(req) {
     }
     
     // 🔥 Hard-coded Netflix headers
-    headers['Host'] = 'android.prod.ftl.netflix.com';
     headers['x-netflix.clienttype'] = 'samurai';
     headers['x-netflix.devicememorylevel'] = CONFIG.device.deviceMemoryLevel;
     headers['x-netflix.context.os-version'] = CONFIG.device.osVersion;
@@ -138,7 +127,6 @@ function buildHeaders(req) {
     headers['Accept-Encoding'] = 'gzip, deflate, br';
     headers['x-forwarded-for'] = CONFIG.fakeIP;
     headers['x-real-ip'] = CONFIG.fakeIP;
-    headers['x-client-ip'] = CONFIG.fakeIP;
     
     // Cookies
     const cookieParts = [];
@@ -162,9 +150,12 @@ function buildHeaders(req) {
 // 🚀 MAIN HANDLER
 // ==========================================
 export default async function handler(req, res) {
-    const urlPath = req.headers['x-invoke-path'] || req.url;
-    const cleanPath = urlPath.split('?')[0];
+    // Get the path from the request
+    const url = req.url || '';
+    const cleanPath = url.split('?')[0];
     const method = req.method;
+
+    console.log(`📥 Request: ${method} ${url}`);
 
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -202,8 +193,11 @@ export default async function handler(req, res) {
     // 🔄 DETERMINE TARGET URL
     // ==========================================
     let targetUrl;
+    
+    // Extract host from request
     const host = req.headers.host || '';
     
+    // Determine target based on path
     if (cleanPath.includes('logs.netflix.com')) {
         targetUrl = 'https://logs.netflix.com' + cleanPath;
     } else if (cleanPath.includes('android.prod.ftl.netflix.com')) {
@@ -213,15 +207,11 @@ export default async function handler(req, res) {
     } else if (cleanPath.includes('occ-0-4409-3647.1.nflxso.net')) {
         targetUrl = 'https://occ-0-4409-3647.1.nflxso.net' + cleanPath;
     } else {
-        // Default: use the original host
-        const baseHost = host.replace(/^.*\/\//, '').split('/')[0];
-        targetUrl = `https://${baseHost}${cleanPath}`;
+        // Default: use https://android.prod.ftl.netflix.com
+        targetUrl = 'https://android.prod.ftl.netflix.com' + cleanPath;
     }
 
-    // If targetUrl doesn't have a protocol, add https://
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-        targetUrl = 'https://' + targetUrl;
-    }
+    console.log(`🎯 Target: ${targetUrl}`);
 
     // ==========================================
     // 📝 BUILD HEADERS
@@ -245,22 +235,36 @@ export default async function handler(req, res) {
         };
 
         // Handle body
-        if (method !== 'GET' && method !== 'HEAD' && req.body) {
-            if (typeof req.body === 'string') {
-                fetchOptions.body = req.body;
-            } else if (Buffer.isBuffer(req.body)) {
-                fetchOptions.body = req.body;
-            } else if (typeof req.body === 'object') {
-                fetchOptions.body = JSON.stringify(req.body);
+        if (method !== 'GET' && method !== 'HEAD') {
+            // Get body from request
+            let body = null;
+            
+            // For Vercel, body is in req.body
+            if (req.body) {
+                if (typeof req.body === 'string') {
+                    body = req.body;
+                } else if (Buffer.isBuffer(req.body)) {
+                    body = req.body;
+                } else if (typeof req.body === 'object') {
+                    body = JSON.stringify(req.body);
+                }
+            }
+            
+            // Also check raw body if available
+            if (!body && req.rawBody) {
+                body = req.rawBody;
+            }
+            
+            if (body) {
+                fetchOptions.body = body;
+                console.log(`📦 Body length: ${body.length}`);
             }
         }
-
-        console.log(`🔄 ${method} ${targetUrl}`);
 
         const response = await fetch(targetUrl, fetchOptions);
         const contentType = response.headers.get('content-type') || '';
         
-        // Read response as buffer for binary data
+        // Read response as buffer
         const responseBuffer = await response.arrayBuffer();
         const responseText = Buffer.from(responseBuffer).toString('utf-8');
         
@@ -276,8 +280,6 @@ export default async function handler(req, res) {
         }
 
         // Forward response headers
-        const headersToForward = ['content-type', 'content-encoding', 'cache-control', 
-                                   'expires', 'pragma', 'vary', 'server', 'x-*'];
         response.headers.forEach((value, key) => {
             if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
                 res.setHeader(key, value);
