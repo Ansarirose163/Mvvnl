@@ -1,10 +1,10 @@
 {
   "functions": {
-    "api/proxy.js": {
+    "api/index.js": {
       "regions": ["bom1"]
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/proxy" }
+    { "source": "/(.*)", "destination": "/api/index.js" }
   ]
 }
