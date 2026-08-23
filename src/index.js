@@ -1,5 +1,5 @@
 // ==========================================
-// 📺 NETFLIX PROXY - FIXED
+// 📺 NETFLIX PROXY - FIXED (Path Based Block)
 // ==========================================
 
 // ==========================================
@@ -28,7 +28,7 @@ const HARD_CODED = {
 };
 
 // ==========================================
-// 🚫 BLOCKED DOMAINS & PATTERNS
+// 🚫 BLOCKED - DOMAINS, PATHS, AND PATTERNS
 // ==========================================
 const BLOCKED_DOMAINS = [
     'logs.netflix.com',
@@ -36,13 +36,28 @@ const BLOCKED_DOMAINS = [
     'bugsnag.com',
     'clevertap.com',
     'appsflyer.com',
-    'branch.io',
-    'firebase'
+    'branch.io'
 ];
 
-const BLOCKED_PATHS = [
+// 🔥 PATH BASED BLOCKING (Isse logs block honge)
+const BLOCKED_PATH_PATTERNS = [
+    '/log/android/cl',
+    '/log/android/logblob',
+    '/logs',
+    '/logging',
+    '/sessions',
+    '/analytics',
+    '/track',
+    '/heartbeat',
+    '/impression',
+    '/sync',
+    '/event'
+];
+
+const BLOCKED_AUTH_PATHS = [
     '/logout', '/delete', '/deactivate', '/unregister',
-    '/signout', '/sign_out', '/deactivateDevice'
+    '/signout', '/sign_out', '/deactivateDevice',
+    '/account/delete', '/profile/delete'
 ];
 
 // ==========================================
@@ -56,7 +71,7 @@ function addBranding(obj) {
         'title', 'name', 'display_name', 'username', 'nickname',
         'text', 'label', 'heading', 'description', 'subtitle',
         'videoTitle', 'showTitle', 'movieTitle', 'seriesTitle',
-        'synopsis', 'summary'
+        'synopsis', 'summary', 'displayName', 'fullName'
     ];
     
     if (Array.isArray(obj)) {
@@ -81,7 +96,6 @@ function addBranding(obj) {
 function spoofVIP(data) {
     if (!data || typeof data !== 'object') return data;
     
-    // Account subscription spoof
     if (data.data?.currentUser?.account) {
         const account = data.data.currentUser.account;
         account.subscriptionStatus = 'active';
@@ -93,7 +107,6 @@ function spoofVIP(data) {
         account.canDelete = false;
     }
     
-    // Profiles - sirf ek rakhna hai
     if (data.data?.currentUser?.account?.profiles) {
         const profiles = data.data.currentUser.account.profiles;
         if (Array.isArray(profiles) && profiles.length > 1) {
@@ -103,7 +116,6 @@ function spoofVIP(data) {
         }
     }
     
-    // Streaming quality unlock
     if (data.data?.video) {
         data.data.video.maxQuality = '4K';
         data.data.video.hdr = true;
@@ -120,7 +132,6 @@ function spoofVIP(data) {
 function buildHeaders(request) {
     const headers = new Headers();
     
-    // Original headers copy (sirf zaroori)
     const essentialOriginal = ['content-type', 'accept'];
     for (const key of essentialOriginal) {
         const value = request.headers.get(key);
@@ -129,7 +140,6 @@ function buildHeaders(request) {
         }
     }
     
-    // 🔥 HARD-CODED HEADERS
     headers.set('x-netflix.esn', HARD_CODED.esn);
     headers.set('x-netflix.esnprefix', HARD_CODED.esnPrefix);
     headers.set('x-netflix.session.id', HARD_CODED.sessionId);
@@ -146,7 +156,6 @@ function buildHeaders(request) {
     headers.set('x-netflix.zuul.brotli.allowed', 'true');
     headers.set('user-agent', HARD_CODED.userAgent);
     
-    // Cookies
     const cookies = [
         `nfvdid=${HARD_CODED.nfvdid}`,
         `flwssn=db673be0-e6a1-4346-8c01-b061caaf8bdd`,
@@ -155,11 +164,36 @@ function buildHeaders(request) {
     ];
     headers.set('cookie', cookies.join('; '));
     
-    // IP Masking
     headers.set('x-forwarded-for', HARD_CODED.fakeIP);
     headers.set('x-real-ip', HARD_CODED.fakeIP);
     
     return headers;
+}
+
+// ==========================================
+// 🔥 CHECK IF REQUEST SHOULD BE BLOCKED
+// ==========================================
+function shouldBlock(request) {
+    const url = new URL(request.url);
+    const hostname = url.hostname;
+    const path = url.pathname;
+    
+    // Domain block
+    if (BLOCKED_DOMAINS.some(domain => hostname.includes(domain))) {
+        return true;
+    }
+    
+    // 🔥 PATH BLOCK - Isse logs block honge
+    if (BLOCKED_PATH_PATTERNS.some(pattern => path.includes(pattern))) {
+        return true;
+    }
+    
+    // Auth block
+    if (BLOCKED_AUTH_PATHS.some(pattern => path.includes(pattern))) {
+        return true;
+    }
+    
+    return false;
 }
 
 // ==========================================
@@ -173,21 +207,13 @@ export default {
         const method = request.method;
         
         // ==========================================
-        // 🚫 BLOCK LOGS & ANALYTICS
+        // 🚫 BLOCK CHECK
         // ==========================================
-        const isBlockedDomain = BLOCKED_DOMAINS.some(domain => 
-            hostname.includes(domain)
-        );
-        
-        const isBlockedPath = BLOCKED_PATHS.some(pattern => 
-            path.includes(pattern)
-        );
-        
-        if (isBlockedDomain || isBlockedPath) {
+        if (shouldBlock(request)) {
             console.log(`🚫 Blocked: ${hostname}${path}`);
             
-            // Logs ke liye 200 OK return
-            if (hostname.includes('logs.netflix.com')) {
+            // Logs ke liye empty response
+            if (path.includes('/log/') || hostname.includes('logs')) {
                 return new Response(null, { 
                     status: 200,
                     headers: {
@@ -199,7 +225,8 @@ export default {
             
             return new Response(JSON.stringify({
                 status: true,
-                message: "Blocked for security"
+                message: "Blocked for security",
+                timestamp: Date.now()
             }), {
                 status: 200,
                 headers: { 
@@ -210,17 +237,15 @@ export default {
         }
         
         // ==========================================
-        // 🔄 DETERMINE TARGET URL
+        // 🔄 DETERMINE TARGET
         // ==========================================
         let targetUrl;
         
-        // Agar request already proxy par aa rahi hai toh original domain use karo
+        // Agar proxy URL hai toh original host use karo
         if (hostname === 'netflix-proxy.ansarirose163.workers.dev') {
-            // Request ka original host header check karo
             const originalHost = request.headers.get('x-original-host') || 'android.prod.cloud.netflix.com';
             targetUrl = `https://${originalHost}${path}${url.search}`;
         } else {
-            // Direct request - forward as is
             targetUrl = `https://${hostname}${path}${url.search}`;
         }
         
@@ -230,22 +255,17 @@ export default {
         // 📝 BUILD HEADERS
         // ==========================================
         const headers = buildHeaders(request);
-        
-        // Original host save karo for proxy routing
         headers.set('x-original-host', hostname);
         
-        // Body handle
         let body = null;
         if (method !== 'GET' && method !== 'HEAD') {
             try {
                 body = await request.arrayBuffer();
-            } catch (e) {
-                // No body
-            }
+            } catch (e) {}
         }
         
         // ==========================================
-        // 🚀 FORWARD REQUEST
+        // 🚀 FORWARD
         // ==========================================
         try {
             const response = await fetch(targetUrl, {
@@ -258,15 +278,10 @@ export default {
             const contentType = response.headers.get('content-type') || '';
             let responseData = await response.arrayBuffer();
             
-            // Agar JSON hai toh process karo
             if (contentType.includes('application/json')) {
                 try {
                     let jsonData = JSON.parse(new TextDecoder().decode(responseData));
-                    
-                    // 🎯 VIP Spoof
                     jsonData = spoofVIP(jsonData);
-                    
-                    // 🏷️ Branding Add
                     jsonData = addBranding(jsonData);
                     
                     return new Response(JSON.stringify(jsonData), {
@@ -278,15 +293,11 @@ export default {
                             'Access-Control-Allow-Headers': '*'
                         }
                     });
-                } catch (e) {
-                    // JSON parse fail - return as is
-                }
+                } catch (e) {}
             }
             
-            // Non-JSON response
             const responseHeaders = new Headers(response.headers);
             responseHeaders.set('Access-Control-Allow-Origin', '*');
-            responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
             responseHeaders.delete('content-encoding');
             responseHeaders.delete('content-length');
             
