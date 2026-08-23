@@ -1,21 +1,11 @@
 // ==========================================
-// 📺 NETFLIX PROXY - COMPLETE FINAL
+// 📺 NETFLIX PROXY - FINAL FIXED
 // ==========================================
 
 // ==========================================
 // 🔒 HARD-CODED NETFLIX CONFIG
 // ==========================================
 const NETFLIX_CONFIG = {
-    // 🔥 Main APIs
-    baseUrls: [
-        'https://android.prod.ftl.netflix.com',
-        'https://android.prod.cloud.netflix.com',
-        'https://logs.netflix.com',
-        'https://sessions.bugsnag.com',
-        'https://occ-0-4409-3647.1.nflxso.net'
-    ],
-    
-    // 🔥 Device Details (Capture se)
     esn: 'NFANDROID1-PXA-P-SAMSUSM-S928B-31506-0202JA72A3JBBA23MNJ42U6INDEUFEFAPKANFOJ04A8UI04N1SJMO7JR6JMQ6QLOP60A3ICK060L3UAQ5AD2BL0M0IILPEP1TNL48D29',
     esnPrefix: 'NFANDROID1-PRV-P-',
     sessionId: '730199105',
@@ -24,7 +14,6 @@ const NETFLIX_CONFIG = {
     secureNetflixId: 'v%3D3%26mac%3DAQEAEQABABRUT3TscZcN3w4ozZ5srttAVkA8IqEvU5I.%26dt%3D1787458611964',
     profileGuid: 'WZFVPUH3OFDT3OOGEQJJF7H5HY',
     
-    // 🔥 Device Info
     deviceInfo: {
         model: 'SM-S928B',
         brand: 'samsung',
@@ -193,6 +182,23 @@ export default async function handler(req, res) {
 
     if (method === 'OPTIONS') {
         return res.status(200).end();
+    }
+
+    // ==========================================
+    // 🔥 FIX: ROOT URL HANDLE
+    // ==========================================
+    if (cleanPath === '/' || cleanPath === '') {
+        return res.status(200).json({
+            status: true,
+            message: "Netflix Proxy is running! 🚀",
+            version: "1.0.0",
+            branding: NETFLIX_CONFIG.branding,
+            endpoints: {
+                graphql: "https://android.prod.ftl.netflix.com/graphql",
+                config: "https://android.prod.ftl.netflix.com/nq/androidui/samurai/v1/config",
+                logs: "https://logs.netflix.com/log/android/cl/2"
+            }
+        });
     }
 
     // ==========================================
