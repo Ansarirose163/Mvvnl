@@ -1,43 +1,29 @@
 // ==========================================
-// 📺 NETFLIX PROXY - COMPLETE
+// 📺 NETFLIX PROXY - WITH BINARY SUPPORT
 // ==========================================
 
 // ==========================================
-// 🔒 NETFLIX CONFIG (Sirf captured data se)
+// 🔒 NETFLIX CONFIG
 // ==========================================
 const NETFLIX_CONFIG = {
-    // 🔥 Main Domains
     baseUrl: 'https://android.prod.ftl.netflix.com',
     cloudUrl: 'https://android.prod.cloud.netflix.com',
     logsUrl: 'https://logs.netflix.com',
     bugsnagUrl: 'https://sessions.bugsnag.com',
     occUrl: 'https://occ-0-4409-3647.1.nflxso.net',
     
-    // 🔥 Device Details (Hard-coded)
+    // 🔥 Device Details
     esn: 'NFANDROID1-PXA-P-SAMSUSM-S928B-31506-0202JA72A3JBBA23MNJ42U6INDEUFEFAPKANFOJ04A8UI04N1SJMO7JR6JMQ6QLOP60A3ICK060L3UAQ5AD2BL0M0IILPEP1TNL48D29',
-    esnPrefix: 'NFANDROID1-PRV-P-',
+    esnPrefix: 'NFANDROID1-PRV-P-L3-',
     sessionId: '730199105',
-    nfvdid: 'BQFmAAEBEIxpfZGgi1LCTmydVUjRImpgznEq92nK9jNTxAbAsFGlE-dcUcUgUKmZy-RB2pTWTBhHROhKpep-dCFDDZUrAIWHAqWPfQpxSmXaqkGHK_AmL27RhB5q9SWMLIj7KKX91YYx6BtKoYy0vxbTUWBd8--D',
-    netflixId: 'v%3D3%26ct%3DBgjHlOvcAxLvA1fFbbVVP2BLO1RUfJPX9VgXjSqVsl8hYsWHuYJgk8hnYYmKfCcOSfVKg-rwRR8j9fvvfbcJaONasT5Y2bWhz2vTs5a9zge3HUTTA2CAa2geeUJ9izVsxZeWvgm3wZWXOPUMsXqu84LXweGoMtDNf1zOz1TTmHEoYibyHlLvV8AcFBBhPh19SPLtBHaaEJOF3rAJg2Lvy5M5LZuDx5wK0jYmt4zP9drtl4NAUxohaJqNKU0WAZh_CTuAzRIO8dfQiOMQtMOJP9uwceQIZ1HsxDYhT-5JXk8R_wNI6sAz-OUXK2vh2PcdL-AGJ0kqdgLHhMNQloPC2Mkf30DE13lOvqEscD76rOsnPcdEuo1JCHSfXLUXeeTEEnzJTMxSTq1FhaTV98uJ8LqKvYvc8L7FpbUyCVZYVWceSl_38PUYf3quPuY0U-qiWTC4U9N7SgwZAjQGrT_Q0Esi07E2kkGPpcCBwG_ewwPtbXpF7pCv8njDArE2-IH95g8j3YHpq1DzXG_CQ-EejEQ0jV1T_eyWB0EwkfdZImwLZMKLJnaBUzJubeFQma_2EcE6IiVIvaNf7Vvo3jipYXCEz7LcMn0_Cb4-41ZqUL9TN87YLdbq3eDh-XoiQt2XN5mWcIGac7zhq0sWkdOh2JUqsWdJr3LGsRgGIg4KDDK18dLxoZ-z8m5iWQ..%26pg%3DWZFVPUH3OFDT3OOGEQJJF7H5HY%26ch%3DAQEAEAABABRUKLhTiZiZ7sXvi6EbLE_qy_k-HQHYz_M.',
-    secureNetflixId: 'v%3D3%26mac%3DAQEAEQABABRUT3TscZcN3w4ozZ5srttAVkA8IqEvU5I.%26dt%3D1787458611964',
     profileGuid: 'WZFVPUH3OFDT3OOGEQJJF7H5HY',
     
-    // 🔥 App Details
     appVersion: '9.22.1',
-    appVer: '9.22.1',
     androidApi: '36',
     osVersion: '36',
-    deviceModel: 'samsung_SM-S928B',
-    manufacturer: 'samsung',
-    model: 'SM-S928B',
-    
-    // 🔥 User Agent
     userAgent: 'com.netflix.mediaclient/62948 (Linux; U; Android 16; en_GB; SM-S928B; Build/BP4A.251205.006; Cronet/119.0.6045.31)',
     
-    // 🔥 Branding
     branding: '@Netflix Premium',
-    
-    // 🔥 Fake IP
     fakeIP: '122.168.2.40'
 };
 
@@ -67,22 +53,14 @@ const addBranding = (obj) => {
 };
 
 // ==========================================
-// 🚫 BLOCKED ENDPOINTS
+// 🚫 BLOCKED PATTERNS
 // ==========================================
 const BLOCKED_PATTERNS = [
-    // Logs - block karo (logs se koi fark nahi padta)
-    '/log/android/cl/2',
-    '/log/android/logblob/1',
     'logs.netflix.com',
-    
-    // Analytics/Crash reporting
     'sessions.bugsnag.com',
     'bugsnag',
-    
-    // Tracking
-    '/android/cl/2',
-    
-    // WebSocket - block
+    '/log/android/cl/2',
+    '/log/android/logblob/1',
     'wss://nrdp.ws.ale.netflix.com',
     'wss://push.prod.netflix.com'
 ];
@@ -105,13 +83,10 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // 🚫 BLOCK LOGS/ANALYTICS/WEBSOCKET
+    // 🚫 BLOCK LOGS/ANALYTICS
     // ==========================================
     if (BLOCKED_PATTERNS.some(p => cleanPath.includes(p))) {
-        return res.status(200).json({ 
-            status: true,
-            data: {} 
-        });
+        return res.status(200).json({ status: true });
     }
 
     // ==========================================
@@ -134,45 +109,44 @@ export default async function handler(req, res) {
     // ==========================================
     // 📝 BUILD HEADERS
     // ==========================================
-    const headers = { ...req.headers };
+    const headers = {};
     
-    // 🔥 HARD-CODED HEADERS
+    // 🔥 Copy only essential headers from original
+    const essentialHeaders = [
+        'x-netflix.clienttype', 'x-netflix.appver', 'x-netflix.esnprefix',
+        'x-netflix.androidapi', 'x-netflix.deviceformfactor', 
+        'x-netflix.devicememorylevel', 'x-netflix.request.attempt',
+        'x-netflix.request.id', 'x-netflix.request.uuid',
+        'x-netflix.client.request.name', 'x-netflix.request.routing',
+        'content-type', 'content-encoding', 'user-agent',
+        'cookie', 'x-netflix.zuul.brotli.allowed'
+    ];
+    
+    essentialHeaders.forEach(key => {
+        if (req.headers[key]) {
+            headers[key] = req.headers[key];
+        }
+    });
+    
+    // 🔥 Override with hard-coded values
     headers['x-netflix.esn'] = NETFLIX_CONFIG.esn;
-    headers['x-netflix.esnprefix'] = NETFLIX_CONFIG.esnPrefix;
     headers['x-netflix.session.id'] = NETFLIX_CONFIG.sessionId;
-    headers['x-netflix.androidapi'] = NETFLIX_CONFIG.androidApi;
-    headers['x-netflix.appver'] = NETFLIX_CONFIG.appVer;
     headers['x-netflix.context.app-version'] = NETFLIX_CONFIG.appVersion;
     headers['x-netflix.context.os-version'] = NETFLIX_CONFIG.osVersion;
-    headers['x-netflix.deviceformfactor'] = 'PHONE';
-    headers['x-netflix.devicememorylevel'] = 'HIGH';
+    headers['x-netflix.androidapi'] = NETFLIX_CONFIG.androidApi;
+    headers['x-netflix.client.current-profile-guid'] = NETFLIX_CONFIG.profileGuid;
     headers['user-agent'] = NETFLIX_CONFIG.userAgent;
     headers['x-forwarded-for'] = NETFLIX_CONFIG.fakeIP;
     headers['x-real-ip'] = NETFLIX_CONFIG.fakeIP;
     
-    // 🔥 Profile GUID agar ho toh
-    if (NETFLIX_CONFIG.profileGuid) {
-        headers['x-netflix.client.current-profile-guid'] = NETFLIX_CONFIG.profileGuid;
-    }
-    
-    // 🔥 Cookies
-    const cookies = [
-        `nfvdid=${NETFLIX_CONFIG.nfvdid}`,
-        `flwssn=db673be0-e6a1-4346-8c01-b061caaf8bdd`,
-        `NetflixId=${NETFLIX_CONFIG.netflixId}`,
-        `SecureNetflixId=${NETFLIX_CONFIG.secureNetflixId}`
-    ];
-    headers['cookie'] = cookies.join('; ');
-    
-    // Delete unwanted headers
+    // Remove problematic headers
     delete headers['accept-encoding'];
     delete headers['content-length'];
     delete headers['host'];
     delete headers['connection'];
-    delete headers['cookie']; // Already set above
 
     // ==========================================
-    // 🚀 FORWARD REQUEST
+    // 🚀 FORWARD REQUEST - WITH BINARY BODY SUPPORT
     // ==========================================
     try {
         const fetchOptions = {
@@ -180,43 +154,50 @@ export default async function handler(req, res) {
             headers: headers,
         };
 
-        if (method !== 'GET' && method !== 'HEAD' && req.body) {
-            if (typeof req.body === 'string') {
-                fetchOptions.body = req.body;
-            } else if (Buffer.isBuffer(req.body)) {
-                fetchOptions.body = req.body;
-            } else if (typeof req.body === 'object') {
-                fetchOptions.body = JSON.stringify(req.body);
+        // 🔥 Handle binary body (msl_v1 encoded)
+        if (method !== 'GET' && method !== 'HEAD') {
+            if (req.body) {
+                // Agar req.body already buffer hai toh direct use karo
+                if (Buffer.isBuffer(req.body)) {
+                    fetchOptions.body = req.body;
+                } 
+                // Agar string hai toh
+                else if (typeof req.body === 'string') {
+                    fetchOptions.body = req.body;
+                } 
+                // Agar object hai toh JSON.stringify
+                else if (typeof req.body === 'object') {
+                    fetchOptions.body = JSON.stringify(req.body);
+                }
             }
         }
 
         console.log(`🔄 ${method} ${targetUrl}`);
+        console.log(`📦 Headers:`, Object.keys(headers).join(', '));
 
         const response = await fetch(targetUrl, fetchOptions);
         const contentType = response.headers.get('content-type') || '';
         
-        const responseText = await response.text();
+        // 🔥 Handle response - pehle buffer mein lo
+        const responseBuffer = Buffer.from(await response.arrayBuffer());
         
-        let data;
-        let isJson = false;
-        
+        // Try to parse as JSON if possible
         try {
-            data = JSON.parse(responseText);
-            isJson = true;
+            const responseText = responseBuffer.toString('utf8');
+            const data = JSON.parse(responseText);
+            
+            // Branding add karo
+            addBranding(data);
+            
+            return res.status(response.status).json(data);
         } catch (e) {
+            // JSON nahi hai - raw binary/msl response
             response.headers.forEach((value, key) => {
                 if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
                     res.setHeader(key, value);
                 }
             });
-            return res.status(response.status).send(responseText);
-        }
-
-        if (isJson && data) {
-            addBranding(data);
-            return res.status(response.status).json(data);
-        } else {
-            return res.status(response.status).send(responseText);
+            return res.status(response.status).send(responseBuffer);
         }
 
     } catch (error) {
