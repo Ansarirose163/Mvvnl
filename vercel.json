@@ -1,10 +1,10 @@
 {
-  "functions": {
-    "api/index.js": {
-      "regions": ["bom1"]
-    }
-  },
+  "version": 2,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index.js" }
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
   ]
 }
+
