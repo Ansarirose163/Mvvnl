@@ -1,9 +1,9 @@
 // ==========================================
-// 📺 NETFLIX PROXY - FINAL FIXED
+// 📺 NETFLIX PROXY - FINAL WORKING
 // ==========================================
 
 // ==========================================
-// 🔒 HARD-CODED NETFLIX CONFIG
+// 🔒 CONFIG
 // ==========================================
 const NETFLIX_CONFIG = {
     esn: 'NFANDROID1-PXA-P-SAMSUSM-S928B-31506-0202JA72A3JBBA23MNJ42U6INDEUFEFAPKANFOJ04A8UI04N1SJMO7JR6JMQ6QLOP60A3ICK060L3UAQ5AD2BL0M0IILPEP1TNL48D29',
@@ -16,15 +16,10 @@ const NETFLIX_CONFIG = {
     
     deviceInfo: {
         model: 'SM-S928B',
-        brand: 'samsung',
         osVersion: '36',
         androidApi: '36',
         appVersion: '9.22.1',
-        appBuild: '62948',
         userAgent: 'com.netflix.mediaclient/62948 (Linux; U; Android 16; en_GB; SM-S928B; Build/BP4A.251205.006; Cronet/119.0.6045.31)',
-        deviceMemoryLevel: 'HIGH',
-        deviceFormFactor: 'PHONE',
-        uiFlavor: 'android',
         locales: 'en-IN'
     },
     
@@ -33,37 +28,19 @@ const NETFLIX_CONFIG = {
 };
 
 // ==========================================
-// 🚫 BLOCKED ENDPOINTS
-// ==========================================
-const BLOCKED_ENDPOINTS = [
-    '/logout', '/signout', '/sign_out', '/deactivate',
-    '/delete_account', '/cancel_membership',
-    '/edit_profile', '/update_profile', '/change_password',
-    '/update_password', '/account/edit', '/profile/edit',
-    '/account/update', '/subscribe', '/upgrade',
-    '/payment', '/billing', '/subscription',
-    '/add_payment', '/update_payment'
-];
-
-// ==========================================
-// 🚫 BLOCK LOGGING/ANALYTICS
+// 🚫 BLOCKED
 // ==========================================
 const BLOCKED_PATTERNS = [
     '/log/android/cl', '/log/android/logblob',
-    'sessions.bugsnag.com', 'clevertap',
-    'firebase', 'analytics', 'track', 'bugsnag'
+    'sessions.bugsnag.com', 'clevertap', 'firebase', 'bugsnag'
 ];
 
 // ==========================================
-// 🏷️ BRANDING FUNCTION
+// 🏷️ BRANDING
 // ==========================================
 const addBranding = (obj) => {
     const tag = ` [${NETFLIX_CONFIG.branding}]`;
-    const targetKeys = [
-        'title', 'name', 'displayName', 'username', 'nickname',
-        'description', 'subtitle', 'heading', 'label',
-        'videoTitle', 'movieTitle', 'showTitle', 'seriesTitle'
-    ];
+    const targetKeys = ['title', 'name', 'displayName', 'username', 'description', 'subtitle', 'heading', 'label'];
     
     if (typeof obj === 'object' && obj !== null) {
         for (let key in obj) {
@@ -79,74 +56,34 @@ const addBranding = (obj) => {
 };
 
 // ==========================================
-// 🎯 VIP SPOOF
-// ==========================================
-const spoofVIP = (data) => {
-    if (!data || typeof data !== 'object') return data;
-    
-    if (data.data && typeof data.data === 'object') {
-        if (data.data.account || data.data.currentUser) {
-            const account = data.data.account || data.data.currentUser;
-            account.isSubscribed = true;
-            account.subscriptionStatus = 'active';
-            account.planType = 'Premium';
-            account.planName = 'Netflix Premium 4K+HDR';
-            account.isTrial = false;
-            account.isExpired = false;
-            account.expiryDate = '2099-12-31';
-            account.maxProfiles = 10;
-            account.has4K = true;
-            account.hasHDR = true;
-            account.hasDolbyAtmos = true;
-        }
-        
-        if (data.data.profile || data.data.profiles) {
-            const profiles = data.data.profile || data.data.profiles;
-            if (Array.isArray(profiles)) {
-                profiles.forEach(p => {
-                    p.canEdit = false;
-                    p.canDelete = false;
-                    p.isActive = true;
-                });
-            }
-        }
-    }
-    
-    return data;
-};
-
-// ==========================================
 // 🛡️ BUILD HEADERS
 // ==========================================
 function buildHeaders(req) {
     const headers = {};
     
     if (req.headers) {
-        const allowHeaders = [
-            'content-type', 'accept', 'accept-encoding',
-            'x-netflix-', 'x-apollo-', 'x-requested-with',
-            'user-agent', 'cookie', 'debugRequest',
-            'upgrade', 'connection', 'sec-', 'content-encoding'
-        ];
-        
         Object.keys(req.headers).forEach(key => {
             const lowerKey = key.toLowerCase();
-            if (allowHeaders.some(h => lowerKey.includes(h) || lowerKey.startsWith('x-netflix'))) {
+            if (lowerKey.includes('x-netflix') || 
+                lowerKey.includes('content-type') || 
+                lowerKey.includes('accept') || 
+                lowerKey.includes('user-agent') || 
+                lowerKey.includes('cookie') || 
+                lowerKey.includes('content-encoding') ||
+                lowerKey.includes('x-apollo') ||
+                lowerKey === 'debugrequest') {
                 headers[key] = req.headers[key];
             }
         });
     }
     
-    // 🔥 Hard-coded Netflix headers
+    // Hard-coded
     headers['x-netflix.esn'] = NETFLIX_CONFIG.esn;
     headers['x-netflix.esnprefix'] = NETFLIX_CONFIG.esnPrefix;
     headers['x-netflix.session.id'] = NETFLIX_CONFIG.sessionId;
     headers['x-netflix.context.os-version'] = NETFLIX_CONFIG.deviceInfo.osVersion;
     headers['x-netflix.context.app-version'] = NETFLIX_CONFIG.deviceInfo.appVersion;
-    headers['x-netflix.context.ui-flavor'] = NETFLIX_CONFIG.deviceInfo.uiFlavor;
     headers['x-netflix.context.locales'] = NETFLIX_CONFIG.deviceInfo.locales;
-    headers['x-netflix.devicememorylevel'] = NETFLIX_CONFIG.deviceInfo.deviceMemoryLevel;
-    headers['x-netflix.deviceformfactor'] = NETFLIX_CONFIG.deviceInfo.deviceFormFactor;
     headers['x-netflix.androidapi'] = NETFLIX_CONFIG.deviceInfo.androidApi;
     headers['x-netflix.appver'] = NETFLIX_CONFIG.deviceInfo.appVersion;
     headers['x-netflix.clienttype'] = 'samurai';
@@ -156,13 +93,8 @@ function buildHeaders(req) {
         headers['cookie'] = `nfvdid=${NETFLIX_CONFIG.nfvdid}; flwssn=${NETFLIX_CONFIG.sessionId}; NetflixId=${NETFLIX_CONFIG.netflixId}; SecureNetflixId=${NETFLIX_CONFIG.secureNetflixId}`;
     }
     
-    if (!headers['user-agent']) {
-        headers['user-agent'] = NETFLIX_CONFIG.deviceInfo.userAgent;
-    }
-    
     headers['x-forwarded-for'] = NETFLIX_CONFIG.fakeIP;
     headers['x-real-ip'] = NETFLIX_CONFIG.fakeIP;
-    headers['x-client-ip'] = NETFLIX_CONFIG.fakeIP;
     
     return headers;
 }
@@ -185,42 +117,25 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // 🔥 FIX: ROOT URL HANDLE
+    // 🔥 ROOT URL
     // ==========================================
     if (cleanPath === '/' || cleanPath === '') {
         return res.status(200).json({
             status: true,
-            message: "Netflix Proxy is running! 🚀",
-            version: "1.0.0",
-            branding: NETFLIX_CONFIG.branding,
-            endpoints: {
-                graphql: "https://android.prod.ftl.netflix.com/graphql",
-                config: "https://android.prod.ftl.netflix.com/nq/androidui/samurai/v1/config",
-                logs: "https://logs.netflix.com/log/android/cl/2"
-            }
+            message: "Netflix Proxy Running! 🚀",
+            branding: NETFLIX_CONFIG.branding
         });
     }
 
     // ==========================================
-    // 🚫 BLOCK LOGOUT/ACCOUNT/PROFILE
-    // ==========================================
-    if (BLOCKED_ENDPOINTS.some(e => cleanPath.includes(e))) {
-        return res.status(200).json({
-            status: true,
-            message: "Action disabled.",
-            data: { isSubscribed: true, subscriptionStatus: 'active' }
-        });
-    }
-
-    // ==========================================
-    // 🚫 BLOCK LOGS/ANALYTICS
+    // 🚫 BLOCK LOGS
     // ==========================================
     if (BLOCKED_PATTERNS.some(p => cleanPath.includes(p))) {
         return res.status(200).json({ status: true, message: "SUCCESS" });
     }
 
     // ==========================================
-    // 🔄 DETERMINE TARGET URL
+    // 🔄 TARGET URL
     // ==========================================
     let targetUrl;
     if (cleanPath.includes('android.prod.ftl.netflix.com')) {
@@ -231,14 +146,12 @@ export default async function handler(req, res) {
         targetUrl = 'https://logs.netflix.com' + urlPath;
     } else if (cleanPath.includes('nflxso.net')) {
         targetUrl = 'https://occ-0-4409-3647.1.nflxso.net' + urlPath;
-    } else if (cleanPath.includes('nrdp.ws.ale.netflix.com') || cleanPath.includes('push.prod.netflix.com')) {
-        return res.status(200).json({ status: true, message: "WebSocket blocked" });
     } else {
         targetUrl = 'https://android.prod.ftl.netflix.com' + urlPath;
     }
 
     // ==========================================
-    // 📝 BUILD HEADERS
+    // 📝 HEADERS
     // ==========================================
     const headers = buildHeaders(req);
     delete headers['host'];
@@ -247,18 +160,23 @@ export default async function handler(req, res) {
     delete headers['accept-encoding'];
 
     // ==========================================
-    // 🚀 FORWARD REQUEST
+    // 🔥 MSL DETECT
+    // ==========================================
+    const isMslRequest = headers['content-encoding'] === 'msl_v1' || 
+                         cleanPath.includes('/nq/androidui/samurai') ||
+                         cleanPath.includes('/android/7.64/api') ||
+                         cleanPath.includes('/nq/androidui/samurai/~9.0.0/api');
+
+    // ==========================================
+    // 🚀 FORWARD
     // ==========================================
     try {
-        const isMslRequest = headers['content-encoding'] === 'msl_v1' || 
-                             cleanPath.includes('/nq/androidui/samurai') ||
-                             cleanPath.includes('/android/7.64/api');
-
         const fetchOptions = {
             method: method,
             headers: headers,
         };
 
+        // 🔥 Body handle - MSL ke liye RAW
         if (method !== 'GET' && method !== 'HEAD' && req.body) {
             if (isMslRequest) {
                 fetchOptions.body = req.body;
@@ -275,24 +193,21 @@ export default async function handler(req, res) {
         console.log(`📦 MSL: ${isMslRequest}`);
 
         const response = await fetch(targetUrl, fetchOptions);
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const buffer = Buffer.from(await response.arrayBuffer());
         
+        // 🔥 Response headers
         response.headers.forEach((value, key) => {
             if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
                 res.setHeader(key, value);
             }
         });
 
-        // MSL response - binary return
-        if (isMslRequest || 
-            response.headers.get('content-encoding') === 'msl_v1' ||
-            cleanPath.includes('/nq/androidui/samurai') ||
-            cleanPath.includes('/android/7.64/api')) {
+        // 🔥 MSL response - RAW binary
+        if (isMslRequest || response.headers.get('content-encoding') === 'msl_v1') {
             return res.status(response.status).send(buffer);
         }
 
-        // Non-MSL - try JSON
+        // 🔥 JSON response
         let data = null;
         let isJson = false;
         try {
@@ -304,7 +219,6 @@ export default async function handler(req, res) {
         } catch (e) {}
 
         if (isJson && data) {
-            data = spoofVIP(data);
             addBranding(data);
             return res.status(response.status).json(data);
         } else {
@@ -312,10 +226,10 @@ export default async function handler(req, res) {
         }
 
     } catch (error) {
-        console.error('❌ Proxy Error:', error);
+        console.error('❌ Error:', error);
         return res.status(500).json({
             status: false,
-            error: "Proxy Error: " + error.message
+            error: error.message
         });
     }
 }
