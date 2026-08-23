@@ -1,5 +1,5 @@
 // ==========================================
-// 📺 NETFLIX PROXY - COMPLETE
+// 📺 NETFLIX PROXY - COMPLETE FINAL
 // ==========================================
 
 // ==========================================
@@ -47,45 +47,22 @@ const NETFLIX_CONFIG = {
 // 🚫 BLOCKED ENDPOINTS
 // ==========================================
 const BLOCKED_ENDPOINTS = [
-    // 🔥 Logout
-    '/logout',
-    '/signout',
-    '/sign_out',
-    '/deactivate',
-    '/delete_account',
-    '/cancel_membership',
-    
-    // 🔥 Account/Profile Edit
-    '/edit_profile',
-    '/update_profile',
-    '/change_password',
-    '/update_password',
-    '/account/edit',
-    '/profile/edit',
-    '/account/update',
-    
-    // 🔥 Payment/Subscription (Block to keep free)
-    '/subscribe',
-    '/upgrade',
-    '/payment',
-    '/billing',
-    '/subscription',
-    '/add_payment',
-    '/update_payment'
+    '/logout', '/signout', '/sign_out', '/deactivate',
+    '/delete_account', '/cancel_membership',
+    '/edit_profile', '/update_profile', '/change_password',
+    '/update_password', '/account/edit', '/profile/edit',
+    '/account/update', '/subscribe', '/upgrade',
+    '/payment', '/billing', '/subscription',
+    '/add_payment', '/update_payment'
 ];
 
 // ==========================================
 // 🚫 BLOCK LOGGING/ANALYTICS
 // ==========================================
 const BLOCKED_PATTERNS = [
-    '/log/android/cl',
-    '/log/android/logblob',
-    '/sessions.bugsnag.com',
-    '/clevertap',
-    '/firebase',
-    '/analytics',
-    '/track',
-    '/bugsnag'
+    '/log/android/cl', '/log/android/logblob',
+    'sessions.bugsnag.com', 'clevertap',
+    'firebase', 'analytics', 'track', 'bugsnag'
 ];
 
 // ==========================================
@@ -113,14 +90,12 @@ const addBranding = (obj) => {
 };
 
 // ==========================================
-// 🎯 VIP SPOOF - Premium features unlock
+// 🎯 VIP SPOOF
 // ==========================================
 const spoofVIP = (data) => {
     if (!data || typeof data !== 'object') return data;
     
-    // Account/User info mein subscription add
     if (data.data && typeof data.data === 'object') {
-        // Account Query response
         if (data.data.account || data.data.currentUser) {
             const account = data.data.account || data.data.currentUser;
             account.isSubscribed = true;
@@ -136,7 +111,6 @@ const spoofVIP = (data) => {
             account.hasDolbyAtmos = true;
         }
         
-        // Profile data
         if (data.data.profile || data.data.profiles) {
             const profiles = data.data.profile || data.data.profiles;
             if (Array.isArray(profiles)) {
@@ -155,16 +129,15 @@ const spoofVIP = (data) => {
 // ==========================================
 // 🛡️ BUILD HEADERS
 // ==========================================
-function buildHeaders(req, targetUrl) {
+function buildHeaders(req) {
     const headers = {};
     
-    // 🔥 Copy essential headers
     if (req.headers) {
         const allowHeaders = [
             'content-type', 'accept', 'accept-encoding',
             'x-netflix-', 'x-apollo-', 'x-requested-with',
             'user-agent', 'cookie', 'debugRequest',
-            'upgrade', 'connection', 'sec-'
+            'upgrade', 'connection', 'sec-', 'content-encoding'
         ];
         
         Object.keys(req.headers).forEach(key => {
@@ -190,17 +163,14 @@ function buildHeaders(req, targetUrl) {
     headers['x-netflix.clienttype'] = 'samurai';
     headers['x-netflix.client.current-profile-guid'] = NETFLIX_CONFIG.profileGuid;
     
-    // 🔥 Cookie headers
     if (!headers['cookie']) {
         headers['cookie'] = `nfvdid=${NETFLIX_CONFIG.nfvdid}; flwssn=${NETFLIX_CONFIG.sessionId}; NetflixId=${NETFLIX_CONFIG.netflixId}; SecureNetflixId=${NETFLIX_CONFIG.secureNetflixId}`;
     }
     
-    // 🔥 User Agent
     if (!headers['user-agent']) {
         headers['user-agent'] = NETFLIX_CONFIG.deviceInfo.userAgent;
     }
     
-    // 🔥 IP Masking
     headers['x-forwarded-for'] = NETFLIX_CONFIG.fakeIP;
     headers['x-real-ip'] = NETFLIX_CONFIG.fakeIP;
     headers['x-client-ip'] = NETFLIX_CONFIG.fakeIP;
@@ -228,31 +198,11 @@ export default async function handler(req, res) {
     // ==========================================
     // 🚫 BLOCK LOGOUT/ACCOUNT/PROFILE
     // ==========================================
-    const isBlocked = BLOCKED_ENDPOINTS.some(endpoint => 
-        cleanPath.includes(endpoint)
-    );
-    
-    if (isBlocked) {
-        console.log(`🚫 Blocked: ${cleanPath}`);
-        
-        // Logout block
-        if (cleanPath.includes('/logout') || cleanPath.includes('/signout')) {
-            return res.status(200).json({
-                status: true,
-                message: "Logout is disabled. You are permanently logged in."
-            });
-        }
-        
-        // Account/Profile block
+    if (BLOCKED_ENDPOINTS.some(e => cleanPath.includes(e))) {
         return res.status(200).json({
             status: true,
-            message: "Account management is disabled.",
-            data: {
-                isSubscribed: true,
-                subscriptionStatus: 'active',
-                planType: 'Premium',
-                planName: 'Netflix Premium 4K+HDR'
-            }
+            message: "Action disabled.",
+            data: { isSubscribed: true, subscriptionStatus: 'active' }
         });
     }
 
@@ -260,34 +210,23 @@ export default async function handler(req, res) {
     // 🚫 BLOCK LOGS/ANALYTICS
     // ==========================================
     if (BLOCKED_PATTERNS.some(p => cleanPath.includes(p))) {
-        console.log(`📊 Blocked Analytics: ${cleanPath}`);
-        return res.status(200).json({ 
-            status: true,
-            message: "SUCCESS"
-        });
+        return res.status(200).json({ status: true, message: "SUCCESS" });
     }
 
     // ==========================================
     // 🔄 DETERMINE TARGET URL
     // ==========================================
     let targetUrl;
-    
     if (cleanPath.includes('android.prod.ftl.netflix.com')) {
         targetUrl = 'https://android.prod.ftl.netflix.com' + urlPath;
     } else if (cleanPath.includes('android.prod.cloud.netflix.com')) {
         targetUrl = 'https://android.prod.cloud.netflix.com' + urlPath;
     } else if (cleanPath.includes('logs.netflix.com')) {
         targetUrl = 'https://logs.netflix.com' + urlPath;
-    } else if (cleanPath.includes('sessions.bugsnag.com')) {
-        targetUrl = 'https://sessions.bugsnag.com' + urlPath;
-    } else if (cleanPath.includes('nflxso.net') || cleanPath.includes('occ-0-')) {
+    } else if (cleanPath.includes('nflxso.net')) {
         targetUrl = 'https://occ-0-4409-3647.1.nflxso.net' + urlPath;
-    } else if (cleanPath.includes('nrdp.ws.ale.netflix.com')) {
-        // WebSocket - pass through
+    } else if (cleanPath.includes('nrdp.ws.ale.netflix.com') || cleanPath.includes('push.prod.netflix.com')) {
         return res.status(200).json({ status: true, message: "WebSocket blocked" });
-    } else if (cleanPath.includes('push.prod.netflix.com')) {
-        // Push WebSocket - pass through
-        return res.status(200).json({ status: true, message: "Push blocked" });
     } else {
         targetUrl = 'https://android.prod.ftl.netflix.com' + urlPath;
     }
@@ -295,9 +234,7 @@ export default async function handler(req, res) {
     // ==========================================
     // 📝 BUILD HEADERS
     // ==========================================
-    const headers = buildHeaders(req, targetUrl);
-    
-    // Remove problematic
+    const headers = buildHeaders(req);
     delete headers['host'];
     delete headers['connection'];
     delete headers['content-length'];
@@ -307,15 +244,19 @@ export default async function handler(req, res) {
     // 🚀 FORWARD REQUEST
     // ==========================================
     try {
+        const isMslRequest = headers['content-encoding'] === 'msl_v1' || 
+                             cleanPath.includes('/nq/androidui/samurai') ||
+                             cleanPath.includes('/android/7.64/api');
+
         const fetchOptions = {
             method: method,
             headers: headers,
-            // Don't compress response
-            compress: false
         };
 
         if (method !== 'GET' && method !== 'HEAD' && req.body) {
-            if (typeof req.body === 'string') {
+            if (isMslRequest) {
+                fetchOptions.body = req.body;
+            } else if (typeof req.body === 'string') {
                 fetchOptions.body = req.body;
             } else if (Buffer.isBuffer(req.body)) {
                 fetchOptions.body = req.body;
@@ -325,42 +266,42 @@ export default async function handler(req, res) {
         }
 
         console.log(`🔄 ${method} ${targetUrl}`);
+        console.log(`📦 MSL: ${isMslRequest}`);
 
         const response = await fetch(targetUrl, fetchOptions);
-        const contentType = response.headers.get('content-type') || '';
-        
-        // Get response as buffer for binary/MSL responses
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         
-        // Try to parse as JSON for text responses
-        let isJson = false;
-        let data = null;
-        
-        try {
-            const text = buffer.toString('utf8');
-            if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-                data = JSON.parse(text);
-                isJson = true;
-            }
-        } catch (e) {
-            // Not JSON
-        }
-
-        // Set response headers
         response.headers.forEach((value, key) => {
             if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
                 res.setHeader(key, value);
             }
         });
 
-        // Process JSON response
+        // MSL response - binary return
+        if (isMslRequest || 
+            response.headers.get('content-encoding') === 'msl_v1' ||
+            cleanPath.includes('/nq/androidui/samurai') ||
+            cleanPath.includes('/android/7.64/api')) {
+            return res.status(response.status).send(buffer);
+        }
+
+        // Non-MSL - try JSON
+        let data = null;
+        let isJson = false;
+        try {
+            const text = buffer.toString('utf8');
+            if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                data = JSON.parse(text);
+                isJson = true;
+            }
+        } catch (e) {}
+
         if (isJson && data) {
             data = spoofVIP(data);
             addBranding(data);
             return res.status(response.status).json(data);
         } else {
-            // Binary response - forward as is
             return res.status(response.status).send(buffer);
         }
 
