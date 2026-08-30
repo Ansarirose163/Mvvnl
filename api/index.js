@@ -53,8 +53,23 @@ function getHeader(req, name) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getOriginalQuery(req) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(req.query || {})) {
+    if (key === 'path') continue;
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, String(item));
+    } else if (value !== undefined && value !== null) {
+      params.append(key, String(value));
+    }
+  }
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
 function getPathAndQuery(req) {
   const parsedUrl = new URL(req.url || '/', 'http://relay.invalid');
+  const originalQuery = getOriginalQuery(req);
   const queryPath = req.query?.path;
 
   // Vercel catch-all route: /api/[[...path]].js. The catch-all path is the
@@ -63,14 +78,14 @@ function getPathAndQuery(req) {
     const pathname = '/' + queryPath.map((part) =>
       encodeURIComponent(String(part))
     ).join('/');
-    return pathname + parsedUrl.search;
+    return pathname + originalQuery;
   }
 
   if (typeof queryPath === 'string' && queryPath.length > 0) {
     const pathname = '/' + queryPath.split('/').map((part) =>
       encodeURIComponent(part)
     ).join('/');
-    return pathname + parsedUrl.search;
+    return pathname + originalQuery;
   }
 
   const invokePath = getHeader(req, 'x-invoke-path');
@@ -82,11 +97,17 @@ function getPathAndQuery(req) {
     return `${invokeUrl.pathname}${invokeUrl.search}`;
   }
 
-  // Also support direct calls such as /api/dcsag_up/... and
-  // /dcsag_up/... when no catch-all query is supplied.
+  // Support the simple Vercel function layout api/index.js and direct
+  // /dcsag_up/... calls when no rewrite query is supplied.
   let pathname = parsedUrl.pathname;
-  if (pathname === '/api' || pathname === '/api/') pathname = '/';
-  else if (pathname.startsWith('/api/')) pathname = pathname.slice(4);
+  if (pathname === '/api' || pathname === '/api/' ||
+      pathname === '/api/index' || pathname === '/api/index/') {
+    pathname = '/';
+  } else if (pathname.startsWith('/api/index/')) {
+    pathname = pathname.slice('/api/index'.length);
+  } else if (pathname.startsWith('/api/')) {
+    pathname = pathname.slice(4);
+  }
   return pathname + parsedUrl.search;
 }
 
