@@ -1,321 +1,262 @@
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+// ==========================================
+// 🎯 AGRISTACK PROXY - @badboy
+// (Signature Bypass + Original Flow)
+// ==========================================
 
-const app = express();
+const APP_CONFIG = {
+    // 🔥 BASE URLS
+    apiBase: 'https://updcs.agristack.gov.in/dcsag_up/crop-survey-api-beta/agristack/v1/api',
+    googleBase: 'https://clients4.google.com/glm/mmap',
+    firebaseBase: 'https://firebaselogging-pa.googleapis.com',
+    
+    // 🔥 DEVICE INFO (Captured)
+    deviceModel: 'M2103K19PI',
+    hardware: 'mt6833',
+    device: 'camellia',
+    product: 'camellia_p_in',
+    manufacturer: 'Xiaomi',
+    osVersion: '11',
+    build: 'RP1A.200720.011',
+    fingerprint: 'POCO/camellia_p_in/camellia:11/RP1A.200720.011/V12.5.3.0.RKSINXM:user/release-keys',
+    appVersion: '2.17.4',
+    appBuild: '300015',
+    packageName: 'com.amnex.agristack',
+    
+    // 🔥 USER INFO (Captured from login)
+    userId: '1592118',
+    userType: 'SURVEYOR',
+    
+    // 🔥 FAKE IP
+    fakeIP: '192.168.1.100'
+};
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.raw({ type: 'application/binary', limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ==========================================
+// 🔥 DPoP SIGNATURE HANDLER - MAIN BYPASS
+// ==========================================
 
-// Constants
-const BASE_URL = 'https://updcs.agristack.gov.in/dcsag_up/crop-survey-api-beta';
+const DPoP_CONFIG = {
+    // 🔥 DPoP Public Key (From captured requests)
+    publicKey: {
+        kty: 'EC',
+        crv: 'P-256',
+        x: 'opVRUSrk-6Mcg--IHHvuOn1oY6wMHQT5tSyRdj9BkQ4',
+        y: 'bYUivIg3eudTFAWImMcLTJNE7PGPKA Rtg8_V3tI7ro'
+    },
+    
+    // 🔥 Original DPoP Token (Capture se)
+    originalToken: 'eyJ0eXAiOiJkcG9wK2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4Ijoib3BWUlVTcmstNk1jZy0tSUhIdnVPbjFvWTZ3TUhRVDV0U3lSZGo5QmtRNCIsInkiOiJiWVVpdklnM2V1ZFRGQVdJbU1wY0xUSk5FN1BHUEtBUnRnOF9WM3RJN3JvIn19'
+};
 
-// Token storage
-let cachedToken = null;
-let tokenExpiry = 0;
+// ==========================================
+// 🎯 SIGNATURE BYPASS FUNCTION
+// ==========================================
 
-// Default token from logs (valid until 2027)
-const DEFAULT_TOKEN = 'eyJhbGciOiJSUzI1NiJ9.eyJkcG9wX2prdCI6IllFNHFpdlZoNFN2c1lYaEYyUXM1bXlUWFpySlI4MzQ2WF8xbWg4cTQzeDgiLCJzdWIiOiIxNTkyMTE4Iiwicm9sZSI6W3siYXV0aG9yaXR5IjoiU3VydmV5b3IifV0sInVzZXJBdXRob3JpdHkiOlsxMTExLDUxLDIwN10sInVzZXJJZCI6IjE1OTIxMTgiLCJpc3MiOiJkY3NhZ3Jpc3RhY2siLCJpYXQiOjE3ODgwODg4MDAsImV4cCI6MTgxOTYyNDgwMH0.wpHOA6CDz8kATLewm6MVyKgan_Pfy_az74dJMwvnF2bO5xLQu2N-rYoBu3xHBiu80AUfsysxH7DnLRtnvyzgYFTx8ZwiTRaEca7GZId8z9RMCrO3O6p4K9zgxsMGEPIkF_OMvAhT-LHMcuNWnHGRro3-w_Qa7-5FnkZ7yg9G7LsQ5E0onk6ZyiyJcKiuxGyL-OFHQB953VGtxwnLqnZel6pP9fXM0GXmYax9qRla9YKVq0rNufF596E62SJjDGA6gpdlwGJjTcbLwZSynatexYCUBxC1VIpeAwQgifQ37VPDhysKGRnUegkmjEtDakk5gBJ6Ypkc66-QTZrFSH-fmdadC9eYbz-nJcZ3ufwL2wFABm-UAyOQVnX2pXG9IXs21gUSIkRNrkduaB6uxOYvmBV9RDNxihDl9gI9VFabN3ObVLSvnaCkBrtce8Tqri6OZZe79CoJBQrrqfJHdWZcp-9KZm2_2WVIussWTu9PvduhwKYH4L-cgPqnrbw4PbgSQo6XFlzsV-jVJAeujWPe4Dqcw-5yru1JcKkySMfBcqgtuM38phXpjwuZpV32MYfpvPlErIfGIdEmSHrjCBZHu0X4oV5zmDEGwCcUSte-hzueiSNGx3wRr_lG8-67pO_SRkY2VQ-s31h9z9M-VUf2jM8kjdNfC8ciMoizDr_FjMk';
-
-// Helper: Extract token from various sources
-function extractToken(data) {
-    if (!data) return null;
-    if (data?.data?.token) return data.data.token;
-    if (data?.token) return data.token;
-    if (data?.accessToken) return data.accessToken;
-    if (data?.ACCESS_TOKEN) return data.ACCESS_TOKEN;
-    return null;
+function bypassSignatureCheck(reqHeaders, reqBody, urlPath, method) {
+    // 🔥 Original DPoP token use karo (Server ko verify karna hai)
+    // Isko change mat karo, warna server reject karega
+    
+    const modifiedHeaders = { ...reqHeaders };
+    
+    // ✅ DPoP token original rakho
+    // ✅ JWT token original rakho
+    // ✅ Device fingerprint original rakho
+    
+    // Sirf IP aur tracking headers change karo
+    const ipHeaders = ['x-forwarded-for', 'x-real-ip', 'x-client-ip', 'x-original-forwarded-for', 'forwarded', 'cf-connecting-ip', 'true-client-ip', 'x-remote-ip', 'x-remote-addr', 'remote-addr', 'remote-address', 'client-ip', 'x-true-ip'];
+    ipHeaders.forEach(header => {
+        if (modifiedHeaders[header]) delete modifiedHeaders[header];
+    });
+    modifiedHeaders['x-forwarded-for'] = APP_CONFIG.fakeIP;
+    modifiedHeaders['x-real-ip'] = APP_CONFIG.fakeIP;
+    
+    // 🔥 IMPORTANT: DPoP aur Authorization headers MAT CHANG KARO
+    // Server inhi se verify karta hai signature
+    
+    return modifiedHeaders;
 }
 
-// Helper: Generate DPoP proof (simplified for bypass)
-function generateDPoP(method, url, accessToken) {
-    const timestamp = Math.floor(Date.now() / 1000);
-    const jti = crypto.randomUUID ? crypto.randomUUID() : uuidv4();
+// ==========================================
+// 🎯 RESPONSE NORMALIZER
+// ==========================================
+
+function normalizeResponse(data) {
+    if (!data || typeof data !== 'object') return data;
+    const normalized = JSON.parse(JSON.stringify(data));
     
-    // Base64 encode header
-    const header = {
-        typ: 'dpop+jwt',
-        alg: 'ES256',
-        jwk: {
-            kty: 'EC',
-            crv: 'P-256',
-            x: 'opVRUSrk-6Mcg-IHHvuOn1oY6wMHQT5tSyRdj9BkQ4',
-            y: 'bYUivIg3eudTF-AWImMpcLTJNE7PGPKARtg8_V3tI7ro'
-        }
+    const replaceMap = {
+        'userId': APP_CONFIG.userId,
+        'user_id': APP_CONFIG.userId,
+        'deviceId': APP_CONFIG.deviceModel,
+        'device_id': APP_CONFIG.deviceModel,
+        'model': APP_CONFIG.deviceModel,
+        'device': APP_CONFIG.device,
+        'manufacturer': APP_CONFIG.manufacturer,
+        'osVersion': APP_CONFIG.osVersion,
+        'os_version': APP_CONFIG.osVersion,
+        'appVersion': APP_CONFIG.appVersion,
+        'app_version': APP_CONFIG.appVersion,
+        'appBuild': APP_CONFIG.appBuild,
+        'app_build': APP_CONFIG.appBuild,
+        'ip': APP_CONFIG.fakeIP,
+        'client_ip': APP_CONFIG.fakeIP
     };
     
-    // Hash the token for ATH
-    const hash = crypto.createHash('sha256')
-        .update(accessToken || '')
-        .digest('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-    
-    const payload = {
-        jti: jti,
-        htm: method.toUpperCase(),
-        htu: url,
-        iat: timestamp,
-        ath: hash
-    };
-    
-    // Create JWT-like structure (simplified)
-    const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
-    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const signature = crypto.randomBytes(64).toString('base64url');
-    
-    return `${headerB64}.${payloadB64}.${signature}`;
-}
-
-// Helper: Build full URL
-function buildUrl(base, path, query) {
-    let url = `${base}/${path}`;
-    if (query && Object.keys(query).length > 0) {
-        const params = new URLSearchParams();
-        for (const [key, value] of Object.entries(query)) {
-            if (value !== undefined && value !== null) {
-                params.append(key, value);
+    const replaceInObject = (obj) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(item => replaceInObject(item));
+        Object.keys(obj).forEach(key => {
+            if (typeof obj[key] === 'string') {
+                if (replaceMap[key]) obj[key] = replaceMap[key];
+                Object.keys(replaceMap).forEach(replaceKey => {
+                    if (obj[key] && obj[key].includes(replaceKey)) {
+                        obj[key] = obj[key].replace(replaceKey, replaceMap[replaceKey]);
+                    }
+                });
+            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                replaceInObject(obj[key]);
             }
-        }
-        const queryString = params.toString();
-        if (queryString) {
-            url += `?${queryString}`;
-        }
-    }
-    return url;
-}
-
-// Helper: Bypass signature verification by modifying the response
-function bypassSignatureVerification(data) {
-    if (!data) return data;
-    
-    // If data has signature fields, remove or modify them
-    if (typeof data === 'object') {
-        const copy = { ...data };
-        
-        // Remove signature verification fields
-        delete copy.signature;
-        delete copy.checksum;
-        delete copy.hash;
-        delete copy.verify;
-        delete copy.sig;
-        delete copy._signature;
-        
-        // If there's a data object, recursively process it
-        if (copy.data && typeof copy.data === 'object') {
-            copy.data = bypassSignatureVerification(copy.data);
-        }
-        
-        return copy;
-    }
-    return data;
-}
-
-// Main proxy handler
-app.all('/api/agristack/*', async (req, res) => {
-    try {
-        const targetPath = req.params[0] || '';
-        const method = req.method;
-        
-        // Build target URL
-        const fullUrl = buildUrl(BASE_URL, targetPath, req.query);
-        
-        console.log(`[Proxy] ${method} ${fullUrl}`);
-        
-        // Get token from request or use default
-        let accessToken = DEFAULT_TOKEN;
-        
-        // Try different auth sources
-        if (req.headers.authorization) {
-            const auth = req.headers.authorization;
-            if (auth.startsWith('Bearer ')) {
-                accessToken = auth.substring(7);
-            } else {
-                accessToken = auth;
-            }
-        } else if (req.headers.cookie) {
-            const cookieMatch = req.headers.cookie.match(/ACCESS_TOKEN=([^;]+)/);
-            if (cookieMatch) {
-                accessToken = cookieMatch[1];
-            }
-        } else if (req.headers['access-token']) {
-            accessToken = req.headers['access-token'];
-        } else if (req.body?.accessToken) {
-            accessToken = req.body.accessToken;
-        }
-        
-        // Use cached token if available and not expired
-        if (cachedToken && Date.now() < tokenExpiry) {
-            accessToken = cachedToken;
-        }
-        
-        // Prepare headers
-        const headers = {
-            'Accept': 'application/json',
-            'Accept-Encoding': 'gzip',
-            'User-Agent': 'okhttp/5.3.2',
-            'Connection': 'Keep-Alive',
-            'Content-Type': req.headers['content-type'] || 'application/json',
-            'Cookie': `ACCESS_TOKEN=${accessToken}`,
-            'language': req.headers.language || 'en',
-            'userId': req.headers.userid || '1592118'
-        };
-        
-        // Add DPoP for non-GET requests
-        if (method !== 'GET') {
-            headers['DPoP'] = generateDPoP(method, fullUrl, accessToken);
-        }
-        
-        // Add additional auth headers to mimic original client
-        headers['X-Device-Elapsed-Time'] = String(Date.now());
-        headers['X-Google-Maps-Mobile-API'] = 'com.amnex.agristack,300015,26.8.0,26.8.0,android:Xiaomi-camellia-M2103K19PI';
-        
-        // Handle request body
-        let requestData = null;
-        let isBinary = false;
-        
-        if (req.body) {
-            if (Buffer.isBuffer(req.body)) {
-                isBinary = true;
-                requestData = req.body;
-                headers['Content-Type'] = req.headers['content-type'] || 'application/binary';
-            } else if (typeof req.body === 'string') {
-                requestData = req.body;
-            } else if (typeof req.body === 'object') {
-                // If it contains token, update it
-                if (req.body.accessToken) {
-                    accessToken = req.body.accessToken;
-                    headers['Cookie'] = `ACCESS_TOKEN=${accessToken}`;
-                }
-                requestData = JSON.stringify(req.body);
-            }
-        }
-        
-        // Forward request to original API
-        const response = await axios({
-            method: method,
-            url: fullUrl,
-            headers: headers,
-            data: requestData,
-            timeout: 60000,
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-            decompress: true,
-            responseType: isBinary ? 'arraybuffer' : 'json'
         });
-        
-        console.log(`[Proxy] Response: ${response.status}`);
-        
-        // Extract new token if present
-        if (response.data && typeof response.data === 'object') {
-            const newToken = extractToken(response.data);
-            if (newToken && newToken !== accessToken) {
-                cachedToken = newToken;
-                tokenExpiry = Date.now() + 3600000;
-                console.log(`[Proxy] Token updated`);
+        return obj;
+    };
+    return replaceInObject(normalized);
+}
+
+// ==========================================
+// 🛠 BUILD HEADERS - ORIGINAL FLOW RAKHO
+// ==========================================
+
+function buildHeaders(req) {
+    const headers = {};
+    
+    // ✅ ALL ORIGINAL HEADERS COPY KARO
+    if (req.headers) {
+        Object.keys(req.headers).forEach(key => {
+            // Sirf problematic headers hatao
+            if (!['accept-encoding', 'content-length', 'host', 'connection'].includes(key.toLowerCase())) {
+                headers[key] = req.headers[key];
             }
-        }
-        
-        // Bypass signature verification
-        let responseData = response.data;
-        if (typeof responseData === 'object' && responseData !== null) {
-            responseData = bypassSignatureVerification(responseData);
-        }
-        
-        // Send response
-        res.status(response.status);
-        if (response.headers['content-type']) {
-            res.set('Content-Type', response.headers['content-type']);
-        }
-        
-        if (isBinary) {
-            res.send(Buffer.from(response.data));
-        } else {
-            res.json(responseData);
-        }
-        
-    } catch (error) {
-        console.error('[Proxy] Error:', error.message);
-        
-        if (error.response) {
-            // Forward error from original API
-            const status = error.response.status;
-            const data = error.response.data;
-            
-            // Bypass signature on error response too
-            let responseData = data;
-            if (typeof data === 'object' && data !== null) {
-                responseData = bypassSignatureVerification(data);
-            }
-            
-            res.status(status).json(responseData);
-        } else {
-            res.status(500).json({
-                error: 'Proxy Error',
-                message: error.message,
-                code: 'PROXY_ERROR'
-            });
-        }
-    }
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        service: 'agristack-middleman'
-    });
-});
-
-// Root endpoint
-app.get('/api', (req, res) => {
-    res.json({
-        service: 'Agristack Middleman API',
-        version: '1.0.0',
-        endpoints: {
-            proxy: '/api/agristack/*',
-            health: '/api/health'
-        },
-        bypass: {
-            signature: 'disabled',
-            verification: 'bypassed'
-        }
-    });
-});
-
-// Catch-all for direct proxy
-app.all('/api/*', (req, res) => {
-    const path = req.params[0] || '';
-    if (path.startsWith('agristack/')) {
-        // Redirect to the correct endpoint
-        const newPath = path.replace('agristack/', '');
-        req.params = { 0: newPath };
-        return app.handle(req, res);
+        });
     }
     
-    res.status(404).json({
-        error: 'Not Found',
-        path: `/api/${path}`,
-        available: '/api/agristack/*'
-    });
-});
+    // 🔥 INJECT KEWAL REQUIRED HEADERS (JO MISSING HO)
+    if (!headers['language']) headers['language'] = 'en';
+    if (!headers['userId']) headers['userId'] = APP_CONFIG.userId;
+    if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    if (!headers['User-Agent']) headers['User-Agent'] = 'okhttp/5.3.2';
+    
+    // 🔥 IMPORTANT: DPoP aur Authorization ORIGINAL RAKHO
+    // Kuch change mat karo, nahi toh signature fail ho jayega
+    
+    return headers;
+}
 
-// Export for Vercel
-module.exports = app;
+// ==========================================
+// 🚀 MAIN HANDLER
+// ==========================================
 
-// Start server if not in Vercel
-if (require.main === module) {
-    const port = process.env.PORT || 3000;
-    app.listen(port, () => {
-        console.log(`Agristack Middleman running on port ${port}`);
-        console.log(`Proxy endpoint: http://localhost:${port}/api/agristack/*`);
-        console.log(`Health check: http://localhost:${port}/api/health`);
-    });
+export default async function handler(req, res) {
+    let urlPath = req.headers['x-invoke-path'] || req.url;
+    const cleanPath = urlPath.split('?')[0];
+    const method = req.method;
+    
+    // CORS Headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+
+    if (method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    // ==========================================
+    // 🔄 DETERMINE TARGET URL
+    // ==========================================
+    let targetBaseUrl = APP_CONFIG.apiBase;
+    
+    if (cleanPath.includes('clients4.google.com') || cleanPath.includes('/glm/mmap')) {
+        targetBaseUrl = APP_CONFIG.googleBase;
+    } else if (cleanPath.includes('firebaselogging')) {
+        targetBaseUrl = APP_CONFIG.firebaseBase;
+    } else if (cleanPath.includes('updcs.agristack.gov.in')) {
+        targetBaseUrl = APP_CONFIG.apiBase;
+    }
+
+    // ==========================================
+    // 🔄 FORWARD REQUEST - ORIGINAL FLOW
+    // ==========================================
+    try {
+        // 🔥 BUILD HEADERS - ORIGINAL RAKHO
+        const headers = buildHeaders(req);
+        
+        // 🔥 SIGNATURE BYPASS - ONLY IP CHANGE
+        const finalHeaders = bypassSignatureCheck(headers, req.body, urlPath, method);
+        
+        // Remove problematic headers
+        delete finalHeaders['accept-encoding'];
+        delete finalHeaders['content-length'];
+        delete finalHeaders['host'];
+        delete finalHeaders['connection'];
+
+        const fetchOptions = {
+            method: method,
+            headers: finalHeaders,
+            // 🔥 IMPORTANT: Don't modify body
+            compress: false
+        };
+
+        // Handle body - ORIGINAL RAKHO
+        if (method !== 'GET' && method !== 'HEAD' && req.body) {
+            if (typeof req.body === 'string') {
+                fetchOptions.body = req.body;
+            } else if (Buffer.isBuffer(req.body)) {
+                fetchOptions.body = req.body;
+            } else if (typeof req.body === 'object') {
+                fetchOptions.body = JSON.stringify(req.body);
+                fetchOptions.headers['content-type'] = 'application/json';
+            }
+        }
+
+        // Build full URL
+        let fullUrl = urlPath;
+        if (!urlPath.startsWith('http')) {
+            fullUrl = targetBaseUrl + urlPath;
+        }
+
+        console.log('🔄 Proxying:', method, fullUrl);
+
+        const response = await fetch(fullUrl, fetchOptions);
+        const contentType = response.headers.get('content-type') || '';
+
+        // ==========================================
+        // 📦 HANDLE RESPONSE - ORIGINAL RAKHO
+        // ==========================================
+        if (contentType.includes('application/json')) {
+            let data = await response.json();
+            
+            // 🔥 ONLY NORMALIZE (Device info change mat karo)
+            data = normalizeResponse(data);
+            
+            // ✅ ORIGINAL RESPONSE - NO MODIFICATION
+            // Sirf device info normalize ki hai
+            
+            return res.status(response.status).json(data);
+        } else {
+            // Handle binary responses (Google Maps etc.)
+            const buffer = Buffer.from(await response.arrayBuffer());
+            response.headers.forEach((value, key) => {
+                if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
+                    res.setHeader(key, value);
+                }
+            });
+            if (contentType) res.setHeader('Content-Type', contentType);
+            return res.status(response.status).send(buffer);
+        }
+
+    } catch (error) {
+        console.error('❌ Proxy Error:', error);
+        return res.status(500).json({
+            code: 500,
+            message: "Proxy Error: " + error.message
+        });
+    }
 }
