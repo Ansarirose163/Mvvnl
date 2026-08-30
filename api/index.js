@@ -10,8 +10,10 @@
  *   CORS_ORIGIN=https://your-authorized-frontend.example
  */
 
+const ORIGINAL_BASE_URL = 'https://updcs.agristack.gov.in';
+
 const CONFIG = Object.freeze({
-  apiUrl: process.env.AGRISTACK_API_URL || 'https://updcs.agristack.gov.in',
+  apiUrl: process.env.AGRISTACK_API_URL || ORIGINAL_BASE_URL,
   allowedOrigins: (process.env.CORS_ORIGIN || '')
     .split(',')
     .map((value) => value.trim())
@@ -52,14 +54,40 @@ function getHeader(req, name) {
 }
 
 function getPathAndQuery(req) {
-  const candidate = getHeader(req, 'x-invoke-path') || req.url || '/';
-  const parsed = new URL(candidate, 'http://relay.invalid');
+  const parsedUrl = new URL(req.url || '/', 'http://relay.invalid');
+  const queryPath = req.query?.path;
 
-  if (parsed.origin !== 'http://relay.invalid') {
-    throw new Error('Only relative request paths are allowed');
+  // Vercel catch-all route: /api/[[...path]].js. The catch-all path is the
+  // original Agristack path without the /api wrapper.
+  if (Array.isArray(queryPath) && queryPath.length > 0) {
+    const pathname = '/' + queryPath.map((part) =>
+      encodeURIComponent(String(part))
+    ).join('/');
+    return pathname + parsedUrl.search;
   }
 
-  return `${parsed.pathname}${parsed.search}`;
+  if (typeof queryPath === 'string' && queryPath.length > 0) {
+    const pathname = '/' + queryPath.split('/').map((part) =>
+      encodeURIComponent(part)
+    ).join('/');
+    return pathname + parsedUrl.search;
+  }
+
+  const invokePath = getHeader(req, 'x-invoke-path');
+  if (invokePath) {
+    const invokeUrl = new URL(invokePath, 'http://relay.invalid');
+    if (invokeUrl.origin !== 'http://relay.invalid') {
+      throw new Error('Only relative paths are allowed');
+    }
+    return `${invokeUrl.pathname}${invokeUrl.search}`;
+  }
+
+  // Also support direct calls such as /api/dcsag_up/... and
+  // /dcsag_up/... when no catch-all query is supplied.
+  let pathname = parsedUrl.pathname;
+  if (pathname === '/api' || pathname === '/api/') pathname = '/';
+  else if (pathname.startsWith('/api/')) pathname = pathname.slice(4);
+  return pathname + parsedUrl.search;
 }
 
 function isAllowedAgristackPath(pathname) {
@@ -173,6 +201,14 @@ export default async function handler(req, res) {
   }
 
   const parsed = new URL(pathAndQuery, 'http://relay.invalid');
+  if (parsed.pathname === '/' || parsed.pathname === '') {
+    return res.status(200).json({
+      ok: true,
+      relay: 'transparent',
+      base_url: ORIGINAL_BASE_URL,
+    });
+  }
+
   if (!isAllowedAgristackPath(parsed.pathname)) {
     return res.status(404).json({ success: false, error: 'Route not allowed' });
   }
