@@ -2,12 +2,9 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/dcsag_up/:path*",
-      "destination": "/api/index?path=/dcsag_up/:path*"
+      "source": "/(.*)",
+      "destination": "/api/index.js"
     }
   ]
 }
+
