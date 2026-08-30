@@ -1,26 +1,144 @@
 // ==========================================
-// 🌾 AGRISTACK PROXY - @badboy (ORIGINAL FLOW)
+// 📺 MVVNL ATTENDANCE PROXY
 // ==========================================
 
-// Target base domains (multiple)
-const TARGET_DOMAINS = {
-    'updcs.agristack.gov.in': 'https://updcs.agristack.gov.in',
-    'firebaselogging-pa.googleapis.com': 'https://firebaselogging-pa.googleapis.com',
-    'clients4.google.com': 'https://clients4.google.com',
-    // Add more if needed
+// ==========================================
+// 🔒 CONFIG
+// ==========================================
+const CONFIG = {
+    baseUrl: 'https://mvvnlatt.com',
+    branding: '@MVVNL Premium',
+    brandKeys: ['Emp_FName', 'SName', 'L_Name', 'MSG', 'DATA', 'Department', 'Designation']
 };
 
-// Fallback base URL
-const DEFAULT_BASE = 'https://updcs.agristack.gov.in';
+// ==========================================
+// 🚫 BLOCKED PATTERNS (Analytics/Tracking)
+// ==========================================
+const BLOCKED_PATTERNS = [
+    'firebaseinstallations',
+    'firebaseremoteconfig',
+    'firebaselogging',
+    'clevertap',
+    'appsflyer',
+    'branch.io',
+    'analytics',
+    'track',
+    'log',
+    'heartbeat',
+    'impression',
+    'sync',
+    'event'
+];
 
+// ==========================================
+// 🏷️ BRANDING FUNCTION
+// ==========================================
+function addBranding(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    const tag = ` [${CONFIG.branding}]`;
+    const targetKeys = CONFIG.brandKeys;
+    
+    if (Array.isArray(obj)) {
+        return obj.map(item => addBranding(item));
+    }
+    
+    for (const key in obj) {
+        if (typeof obj[key] === 'string' && targetKeys.includes(key)) {
+            if (!obj[key].includes(CONFIG.branding)) {
+                obj[key] = obj[key].trim() + tag;
+            }
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+            addBranding(obj[key]);
+        }
+    }
+    
+    return obj;
+}
+
+// ==========================================
+// 🛡️ PLAY STORE VALIDATION BYPASS
+// ==========================================
+function bypassPlayStoreValidation(data) {
+    if (!data || typeof data !== 'object') return data;
+    
+    // 🔥 PlayStoreValidation endpoint ka response modify
+    if (data.STATUS === 'true' || data.STATUS === true) {
+        data.STATUS = 'true';
+        data.DATA = '1';  // Valid device
+        return data;
+    }
+    
+    // 🔥 CheackAppVersion - Force ACTIVE
+    if (data.STATUS === 'OK' || data.STATUS === 'ERROR') {
+        if (data.AndroidAppStatus) {
+            data.AndroidAppStatus = 'ACTIVE';
+        }
+        if (data.iOSAppStatus) {
+            data.iOSAppStatus = 'ACTIVE';
+        }
+        if (data.REGALLOW) {
+            data.REGALLOW = '1';
+        }
+        if (data.checkGeofence !== undefined) {
+            data.checkGeofence = 1;
+        }
+        if (data.checkLiveness) {
+            data.checkLiveness = '1';
+        }
+        if (data.isRegImgAiOn) {
+            data.isRegImgAiOn = '1';
+        }
+        if (data.AndroidVersion) {
+            data.AndroidVersion = '50';
+        }
+        return data;
+    }
+    
+    // 🔥 Login Response - Device approval bypass
+    if (data.API_STATUS === 'ERROR' && data.DATA) {
+        if (typeof data.DATA === 'string' && data.DATA.includes('Device Approval')) {
+            data.API_STATUS = 'OK';
+            data.DATA = 'Login Successfully';
+            data.MSG = 'Login Successfully';
+            data.COUNT = 1;
+            data.REGALLOW = '1';
+            // Add default data if missing
+            if (!data.DATA || data.DATA === 'Your Device Approval Is successfully. Please ReLogin') {
+                data.DATA = [{
+                    Emp_Code: '4862',
+                    Emp_FName: 'DEVESH TRIPATHI',
+                    Department: 'SKILLED',
+                    Designation: 'SSO-Samvida-Skilled',
+                    G_Late: '27.535264',
+                    G_Long: '81.473459',
+                    R_meter: '10',
+                    geofanceid: '5302'
+                }];
+            }
+        }
+        return data;
+    }
+    
+    // 🔥 UserLoginNew1 - Success response fix
+    if (data.API_STATUS === 'OK' && data.MSG && data.MSG.includes('Login')) {
+        data.REGALLOW = '1';
+        data.COUNT = 1;
+        return data;
+    }
+    
+    return data;
+}
+
+// ==========================================
+// 🚀 MAIN HANDLER
+// ==========================================
 export default async function handler(req, res) {
-    // Get the full URL from the request (either from x-invoke-path or req.url)
     let urlPath = req.headers['x-invoke-path'] || req.url;
-    // Remove query string for host detection
     const cleanPath = urlPath.split('?')[0];
     const method = req.method;
 
-    // CORS headers for browser testing (optional)
+    // CORS Headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', '*');
@@ -29,109 +147,122 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
-    // Extract host from the original request's Host header or from the URL
-    let host = req.headers.host || '';
-    let targetBase = DEFAULT_BASE;
-
-    // If the request already has a full URL (e.g., from proxy), extract host
-    if (urlPath.startsWith('http')) {
-        try {
-            const urlObj = new URL(urlPath);
-            host = urlObj.hostname;
-            targetBase = `${urlObj.protocol}//${urlObj.host}`;
-        } catch (e) {
-            // fallback
-        }
-    } else {
-        // If using relative path, use the Host header to determine target
-        // We need to map the host to the base URL
-        // The host will be like updcs.agristack.gov.in
-        if (host && TARGET_DOMAINS[host]) {
-            targetBase = TARGET_DOMAINS[host];
-        } else {
-            // Try to match using the path
-            for (const [domain, base] of Object.entries(TARGET_DOMAINS)) {
-                if (urlPath.includes(domain)) {
-                    targetBase = base;
-                    break;
-                }
-            }
+    // ==========================================
+    // 🚫 BLOCK ANALYTICS/TRACKING
+    // ==========================================
+    for (const pattern of BLOCKED_PATTERNS) {
+        if (cleanPath.includes(pattern)) {
+            return res.status(200).json({ 
+                status: true,
+                data: {} 
+            });
         }
     }
 
-    // Build the full target URL
-    let fullUrl;
-    if (urlPath.startsWith('http')) {
-        fullUrl = urlPath;
-    } else {
-        // Remove leading slash if any to avoid double slash
-        const path = urlPath.startsWith('/') ? urlPath : '/' + urlPath;
-        fullUrl = targetBase + path;
-    }
+    // ==========================================
+    // 📝 BUILD TARGET URL
+    // ==========================================
+    let targetUrl = CONFIG.baseUrl + urlPath;
 
-    // Prepare headers: copy all original headers except those we must not forward
+    // ==========================================
+    // 📝 BUILD HEADERS
+    // ==========================================
     const headers = {};
-    for (const [key, value] of Object.entries(req.headers)) {
-        const lowerKey = key.toLowerCase();
-        // Skip hop-by-hop headers
-        if (!['host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'].includes(lowerKey)) {
-            headers[key] = value;
-        }
-    }
-    // Ensure Content-Type if body is present
-    if (req.body && !headers['content-type']) {
-        headers['content-type'] = 'application/json'; // fallback
-    }
 
-    // Prepare fetch options
-    const fetchOptions = {
-        method: method,
-        headers: headers,
-        // Do not compress to avoid issues
-        compress: false,
-    };
-
-    // Add body for non-GET/HEAD
-    if (method !== 'GET' && method !== 'HEAD' && req.body) {
-        if (typeof req.body === 'string') {
-            fetchOptions.body = req.body;
-        } else if (Buffer.isBuffer(req.body)) {
-            fetchOptions.body = req.body;
-        } else if (typeof req.body === 'object') {
-            fetchOptions.body = JSON.stringify(req.body);
-            if (!headers['content-type']) {
-                fetchOptions.headers['content-type'] = 'application/json';
-            }
+    // Copy original headers (except hop-by-hop)
+    const hopByHop = ['host', 'connection', 'content-length', 'content-encoding', 'transfer-encoding'];
+    for (const [name, value] of Object.entries(req.headers || {})) {
+        const lower = name.toLowerCase();
+        if (!hopByHop.includes(lower) && !lower.startsWith('x-')) {
+            headers[name] = Array.isArray(value) ? value.join(', ') : String(value);
         }
     }
 
+    // Keep essential headers
+    headers['accept'] = 'application/json; charset=utf-8';
+    headers['content-type'] = 'application/json; charset=utf-8';
+    headers['user-agent'] = req.headers['user-agent'] || 'okhttp/4.12.0';
+
+    // ==========================================
+    // 📝 GET REQUEST BODY
+    // ==========================================
+    let body = null;
+    if (method !== 'GET' && method !== 'HEAD') {
+        body = req.body;
+        if (body && typeof body === 'object' && !Buffer.isBuffer(body)) {
+            body = JSON.stringify(body);
+        }
+    }
+
+    // ==========================================
+    // 🚀 FORWARD REQUEST
+    // ==========================================
     try {
-        // Forward the request
-        const response = await fetch(fullUrl, fetchOptions);
+        const fetchOptions = {
+            method: method,
+            headers: headers,
+            redirect: 'manual',
+        };
+        if (body) {
+            fetchOptions.body = body;
+        }
 
-        // Get response body
+        console.log(`🔄 ${method} ${targetUrl}`);
+
+        const response = await fetch(targetUrl, fetchOptions);
+        const responseBuffer = Buffer.from(await response.arrayBuffer());
         const contentType = response.headers.get('content-type') || '';
 
-        // Handle response
+        // 🔥 PROCESS JSON RESPONSE
         if (contentType.includes('application/json')) {
-            const data = await response.json();
-            // Optional: you can inject branding here if needed, but we keep original
-            // data = addBranding(data); // if you want @badboy
-            return res.status(response.status).json(data);
-        } else {
-            // Binary or other
-            const buffer = Buffer.from(await response.arrayBuffer());
-            // Copy response headers
-            response.headers.forEach((value, key) => {
-                if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
-                    res.setHeader(key, value);
+            try {
+                let data = JSON.parse(responseBuffer.toString('utf8'));
+                
+                // 🔥 BYPASS PLAY STORE VALIDATION
+                data = bypassPlayStoreValidation(data);
+                
+                // 🔥 ADD BRANDING
+                data = addBranding(data);
+                
+                const processedBuffer = Buffer.from(JSON.stringify(data), 'utf8');
+                
+                // Copy response headers
+                for (const [key, value] of response.headers.entries()) {
+                    const lower = key.toLowerCase();
+                    if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(lower)) {
+                        res.setHeader(key, value);
+                    }
                 }
-            });
-            if (contentType) res.setHeader('Content-Type', contentType);
-            return res.status(response.status).send(buffer);
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                return res.status(response.status).send(processedBuffer);
+                
+            } catch (e) {
+                console.error('JSON Parse Error:', e.message);
+                // Pass through original response
+                for (const [key, value] of response.headers.entries()) {
+                    const lower = key.toLowerCase();
+                    if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(lower)) {
+                        res.setHeader(key, value);
+                    }
+                }
+                return res.status(response.status).send(responseBuffer);
+            }
         }
+
+        // 🔥 NON-JSON RESPONSE - Pass through
+        for (const [key, value] of response.headers.entries()) {
+            const lower = key.toLowerCase();
+            if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(lower)) {
+                res.setHeader(key, value);
+            }
+        }
+        return res.status(response.status).send(responseBuffer);
+
     } catch (error) {
-        console.error('Proxy Error:', error);
-        return res.status(500).json({ error: 'Proxy error', message: error.message });
+        console.error('❌ Proxy Error:', error);
+        return res.status(502).json({
+            success: false,
+            error: 'Upstream request failed: ' + error.message
+        });
     }
 }
