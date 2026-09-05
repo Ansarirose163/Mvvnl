@@ -1,16 +1,16 @@
-// Safe transparent proxy for legitimate normal login only.
-// Do not hardcode passwords, access tokens, user IDs, or premium flags.
+"use strict";
+
+// Genuine normal-login transparent proxy for Vercel.
+// This file forwards the user's own request to the authorized upstream API.
+// It does not inject tokens, change identities, capture OTPs, or modify JSON.
 
 const BASE_URL = process.env.BASE_URL ||
   "https://alright-prod-b4argqfwfdfpezfc.centralindia-01.azurewebsites.net";
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
+// Optional for same-origin deployments. Set it only for a separate frontend origin.
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "";
 
-if (!ALLOWED_ORIGIN) {
-  throw new Error("ALLOWED_ORIGIN environment variable is required");
-}
-
-const HOP_BY_HOP = new Set([
+const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
   "proxy-authenticate",
@@ -23,82 +23,126 @@ const HOP_BY_HOP = new Set([
   "content-length"
 ]);
 
-function copyRequestHeaders(source) {
-  const headers = {};
-  for (const [name, value] of Object.entries(source || {})) {
-    const lower = name.toLowerCase();
-    if (!HOP_BY_HOP.has(lower)) headers[lower] = value;
-  }
-  return headers;
-}
+function setCorsHeaders(res) {
+  if (!ALLOWED_ORIGIN) return;
 
-function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With"
+    "Content-Type, Authorization, X-Requested-With, Accept"
   );
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Vary", "Origin");
 }
 
-function getSafePath(req) {
-  const candidate = String(req.headers?.["x-invoke-path"] || req.url || "/");
-  // Only accept a relative path. This prevents forwarding to an arbitrary host.
-  if (!candidate.startsWith("/") || candidate.startsWith("//")) return "/";
-  return candidate;
+function copyRequestHeaders(input) {
+  const output = {};
+
+  for (const [name, value] of Object.entries(input || {})) {
+    const lowerName = name.toLowerCase();
+    if (!HOP_BY_HOP_HEADERS.has(lowerName) && value !== undefined) {
+      output[lowerName] = value;
+    }
+  }
+
+  return output;
 }
 
-export default async function handler(req, res) {
-  setCors(res);
+function getRelativePath(req) {
+  const rawUrl = typeof req.url === "string" && req.url.length > 0
+    ? req.url
+    : "/";
+
+  // Only forward relative paths; never accept a user-supplied absolute URL.
+  if (!rawUrl.startsWith("/") || rawUrl.startsWith("//")) {
+    return "/";
+  }
+
+  return rawUrl;
+}
+
+function getRequestBody(req) {
+  if (req.method === "GET" || req.method === "HEAD") {
+    return undefined;
+  }
+
+  if (req.body === undefined || req.body === null) {
+    return undefined;
+  }
+
+  if (typeof req.body === "string" || Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+
+  return JSON.stringify(req.body);
+}
+
+function copyResponseHeaders(upstream, res) {
+  upstream.headers.forEach((value, name) => {
+    const lowerName = name.toLowerCase();
+
+    // Set-Cookie is handled separately because it may contain multiple values.
+    if (!HOP_BY_HOP_HEADERS.has(lowerName) && lowerName !== "set-cookie") {
+      res.setHeader(name, value);
+    }
+  });
+
+  if (typeof upstream.headers.getSetCookie === "function") {
+    const cookies = upstream.headers.getSetCookie();
+    if (cookies.length > 0) {
+      res.setHeader("Set-Cookie", cookies);
+    }
+  }
+}
+
+async function handler(req, res) {
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
-  const path = getSafePath(req);
-  const targetUrl = new URL(path, BASE_URL).toString();
-  const headers = copyRequestHeaders(req.headers);
+  if (!req.method) {
+    return res.status(400).json({
+      status: false,
+      error: "Request method is missing"
+    });
+  }
 
-  const options = {
+  let targetUrl;
+  try {
+    targetUrl = new URL(getRelativePath(req), BASE_URL).toString();
+  } catch (error) {
+    console.error("Invalid BASE_URL:", error);
+    return res.status(500).json({
+      status: false,
+      error: "Proxy configuration is invalid"
+    });
+  }
+
+  const requestOptions = {
     method: req.method,
-    headers,
+    headers: copyRequestHeaders(req.headers),
     redirect: "manual"
   };
 
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    if (req.body !== undefined && req.body !== null) {
-      options.body = typeof req.body === "string"
-        ? req.body
-        : JSON.stringify(req.body);
-    }
+  const body = getRequestBody(req);
+  if (body !== undefined) {
+    requestOptions.body = body;
   }
 
   try {
-    const upstream = await fetch(targetUrl, options);
+    const upstream = await fetch(targetUrl, requestOptions);
+    copyResponseHeaders(upstream, res);
 
-    // Forward ordinary response headers. Authentication response is unchanged.
-    upstream.headers.forEach((value, name) => {
-      const lower = name.toLowerCase();
-      if (!HOP_BY_HOP.has(lower) && lower !== "set-cookie") {
-        res.setHeader(name, value);
-      }
-    });
-
-    // Preserve multiple Set-Cookie headers when the runtime supports it.
-    const cookies = typeof upstream.headers.getSetCookie === "function"
-      ? upstream.headers.getSetCookie()
-      : [];
-    if (cookies.length) res.setHeader("Set-Cookie", cookies);
-
-    const body = await upstream.arrayBuffer();
-    return res.status(upstream.status).send(Buffer.from(body));
+    const responseBuffer = Buffer.from(await upstream.arrayBuffer());
+    return res.status(upstream.status).send(responseBuffer);
   } catch (error) {
-    console.error("Proxy error:", error);
+    console.error("Upstream proxy error:", error);
     return res.status(502).json({
       status: false,
-      error: "Upstream authentication service unavailable"
+      error: "Upstream service unavailable"
     });
   }
 }
