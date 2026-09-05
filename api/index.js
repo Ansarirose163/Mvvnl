@@ -1,237 +1,104 @@
-// ==========================================
-// 📡 ALRIGHT TV PROXY — PREMIUM TOKEN INJECTOR
-// ==========================================
+// Safe transparent proxy for legitimate normal login only.
+// Do not hardcode passwords, access tokens, user IDs, or premium flags.
 
-const BASE_URL = "https://alright-prod-b4argqfwfdfpezfc.centralindia-01.azurewebsites.net";
+const BASE_URL = process.env.BASE_URL ||
+  "https://alright-prod-b4argqfwfdfpezfc.centralindia-01.azurewebsites.net";
 
-// 🔥 TERA PREMIUM TOKEN (jo capture mein mila)
-const PREMIUM_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjI0N2Y4MDYwMDM5YjVmNDBkOTQ5NjkzOGJiMTg5NzA2ZWY4ODkzM2QiLCJ0eXAiOiJKV1QifQ.eyJsb2dpblR5cGUiOjAsInVzZXJJZCI6IjZhNzMxMGNkNzJhNDhlZjkxYmJmOWE3NSIsInBob25lVmVyaWZpZWQiOnRydWUsInBob25lX251bWJlciI6Iis5MTkyMDUyMzEwNDIiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vYWxyaWdodC0zYWRmZCIsImF1ZCI6ImFscmlnaHQtM2FkZmQiLCJhdXRoX3RpbWUiOjE3ODg1OTUwMDEsInVzZXJfaWQiOiJNTy0zNTU2NDNmYTc3YWU0ZDVlYWI2NDdjYWMzYjRkZjAxNCIsInN1YiI6Ik1PLTM1NTY0M2ZhNzdhZTRkNWVhYjY0N2NhYzNiNGRmMDE0IiwiaWF0IjoxNzg4NTk1MDAxLCJleHAiOjE3ODg1OTg2MDEsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnt9LCJzaWduX2luX3Byb3ZpZGVyIjoiY3VzdG9tIn19.NTogk3P0OAnfoZ4w9PyadnbeyuitdMXgddgJEcB1a4vhhUQly5iAQzKcrPndNHoVG2Zd12JFrM8WldOAgNMHW4TV4NqV2agkXH-QqlVppJHFQvVCcvE6n73i51ow0zmjYhOz3KCba2UWNdGmhERgxjOJRCRWmTawYs7Ys3kHTxSjpHOxCk4gEoNeeHe3Ix2sQUwXRSa69O1hJNtBpjKKagB8181ZOo05yNfnhgW77b3CxT6KXVwLhAky91QycWhluZXQenfAMI9bSEzaxJudsPN6h7n5Hq95dvDe8VSIOXpLq7fGK18SwsElg1LB6vl6IuRhOd85KsfnnFiwAFruIA";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
 
-// 🔥 Premium User ID
-const PREMIUM_USER_ID = "6a7310cd72a48ef91bbf9a75";
+if (!ALLOWED_ORIGIN) {
+  throw new Error("ALLOWED_ORIGIN environment variable is required");
+}
 
-// 🔥 Premium Phone Number
-const PREMIUM_PHONE = "+919205231042";
+const HOP_BY_HOP = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "host",
+  "content-length"
+]);
 
-// 🔥 Har request mein inject hone wale headers
-const INJECT_HEADERS = {
-    "key": "26a1d8b05105f27f943b088a6e8c9cf035bde8479c437c24277cbfd214c4135b",
-    "device-id": "9e9f95f096bd5c61",
-    "app-version": "29.1.0",
-    "platform": "android",
-    "iscore": "yes",
-    "accept": "application/json",
-    "content-type": "application/json",
-    "user-agent": "Dart/3.9 (dart:io)"
-};
+function copyRequestHeaders(source) {
+  const headers = {};
+  for (const [name, value] of Object.entries(source || {})) {
+    const lower = name.toLowerCase();
+    if (!HOP_BY_HOP.has(lower)) headers[lower] = value;
+  }
+  return headers;
+}
 
-// 🚫 Block Tracking/Analytics
-const BLOCKED_PATTERNS = [
-    'sentry.io', 
-    'firebaselogging', 
-    'posthog', 
-    'moengage',
-    'otpless', 
-    'clevertap', 
-    'appsflyer', 
-    'analytics',
-    'events.otpless', 
-    'firebaseinstallations',
-    'securetoken.googleapis.com', 
-    'identitytoolkit',
-    'user-auth.otpless.app',
-    'firebaseremoteconfig',
-    'firebaselogging'
-];
+function setCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With"
+  );
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+}
 
-// 🔥 Login Endpoints — yahan token replace karna hai
-const LOGIN_ENDPOINTS = [
-    '/user/phone-otp/verify',
-    '/user/otpless-login',
-    '/user/firebase-login',
-    '/user/login',
-    '/v1/auth/login'
-];
+function getSafePath(req) {
+  const candidate = String(req.headers?.["x-invoke-path"] || req.url || "/");
+  // Only accept a relative path. This prevents forwarding to an arbitrary host.
+  if (!candidate.startsWith("/") || candidate.startsWith("//")) return "/";
+  return candidate;
+}
 
 export default async function handler(req, res) {
-    // 🔥 URL path extract karo
-    let urlPath = req.headers['x-invoke-path'] || req.url;
-    const fullPath = urlPath;
-    const cleanPath = urlPath.split('?')[0];
-    const method = req.method;
+  setCors(res);
 
-    console.log("📥", method, cleanPath);
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
 
-    // CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', '*');
+  const path = getSafePath(req);
+  const targetUrl = new URL(path, BASE_URL).toString();
+  const headers = copyRequestHeaders(req.headers);
 
-    if (method === 'OPTIONS') {
-        return res.status(200).end();
+  const options = {
+    method: req.method,
+    headers,
+    redirect: "manual"
+  };
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    if (req.body !== undefined && req.body !== null) {
+      options.body = typeof req.body === "string"
+        ? req.body
+        : JSON.stringify(req.body);
     }
+  }
 
-    // 🚫 Block Tracking
-    if (BLOCKED_PATTERNS.some(p => cleanPath.includes(p))) {
-        console.log("🚫 Blocked:", cleanPath);
-        return res.status(200).json({ 
-            status: true, 
-            message: "Blocked" 
-        });
-    }
+  try {
+    const upstream = await fetch(targetUrl, options);
 
-    try {
-        // 🔥 Headers build karo
-        const headers = {};
+    // Forward ordinary response headers. Authentication response is unchanged.
+    upstream.headers.forEach((value, name) => {
+      const lower = name.toLowerCase();
+      if (!HOP_BY_HOP.has(lower) && lower !== "set-cookie") {
+        res.setHeader(name, value);
+      }
+    });
 
-        // Original headers copy
-        if (req.headers) {
-            Object.keys(req.headers).forEach(key => {
-                if (!['accept-encoding', 'content-length', 'host', 'connection'].includes(key.toLowerCase())) {
-                    headers[key] = req.headers[key];
-                }
-            });
-        }
+    // Preserve multiple Set-Cookie headers when the runtime supports it.
+    const cookies = typeof upstream.headers.getSetCookie === "function"
+      ? upstream.headers.getSetCookie()
+      : [];
+    if (cookies.length) res.setHeader("Set-Cookie", cookies);
 
-        // 🔥 Inject hardcoded headers
-        Object.keys(INJECT_HEADERS).forEach(key => {
-            headers[key] = INJECT_HEADERS[key];
-        });
-
-        // 🔥 HAR REQUEST MEIN PREMIUM TOKEN INJECT
-        headers['authorization'] = PREMIUM_TOKEN;
-
-        // Cleanup
-        delete headers['accept-encoding'];
-        delete headers['content-length'];
-        delete headers['host'];
-        delete headers['connection'];
-
-        const fetchOptions = {
-            method: method,
-            headers: headers,
-        };
-
-        if (method !== 'GET' && method !== 'HEAD' && req.body) {
-            if (typeof req.body === 'object') {
-                fetchOptions.body = JSON.stringify(req.body);
-            } else {
-                fetchOptions.body = req.body;
-            }
-        }
-
-        // 🎯 TARGET URL
-        const targetUrl = BASE_URL + fullPath;
-        console.log("🚀 Forwarding to:", targetUrl);
-
-        const response = await fetch(targetUrl, fetchOptions);
-        let data = await response.text();
-
-        // ==========================================
-        // 🔥🔥🔥 RESPONSE MODIFY — TOKEN REPLACE
-        // ==========================================
-        try {
-            let jsonData = JSON.parse(data);
-
-            let modified = false;
-
-            // 🎯 Token replace
-            if (jsonData.token) {
-                jsonData.token = PREMIUM_TOKEN;
-                modified = true;
-                console.log("✅ token replaced");
-            }
-            if (jsonData.idToken) {
-                jsonData.idToken = PREMIUM_TOKEN;
-                modified = true;
-                console.log("✅ idToken replaced");
-            }
-            if (jsonData.accessToken) {
-                jsonData.accessToken = PREMIUM_TOKEN;
-                modified = true;
-                console.log("✅ accessToken replaced");
-            }
-            if (jsonData.firebaseToken) {
-                jsonData.firebaseToken = PREMIUM_TOKEN;
-                modified = true;
-                console.log("✅ firebaseToken replaced");
-            }
-            if (jsonData.authorization) {
-                jsonData.authorization = PREMIUM_TOKEN;
-                modified = true;
-            }
-
-            // 🎯 User ID replace
-            if (jsonData.userId) {
-                jsonData.userId = PREMIUM_USER_ID;
-                modified = true;
-                console.log("✅ userId replaced");
-            }
-            if (jsonData.user && jsonData.user.id) {
-                jsonData.user.id = PREMIUM_USER_ID;
-                modified = true;
-            }
-            if (jsonData.user && jsonData.user.userId) {
-                jsonData.user.userId = PREMIUM_USER_ID;
-                modified = true;
-            }
-
-            // 🎯 Phone number replace
-            if (jsonData.phoneNumber) {
-                jsonData.phoneNumber = PREMIUM_PHONE;
-                modified = true;
-            }
-            if (jsonData.user && jsonData.user.phoneNumber) {
-                jsonData.user.phoneNumber = PREMIUM_PHONE;
-                modified = true;
-            }
-            if (jsonData.user && jsonData.user.mobile) {
-                jsonData.user.mobile = PREMIUM_PHONE;
-                modified = true;
-            }
-
-            // 🎯 Premium status inject
-            if (jsonData.user) {
-                jsonData.user.isSubscribed = true;
-                jsonData.user.subscriptionStatus = 'active';
-                jsonData.user.packageType = 'premium';
-                jsonData.user.validity = 'Lifetime Unlimited';
-                jsonData.user.isTrial = false;
-                modified = true;
-                console.log("✅ Premium status injected");
-            }
-            
-            // Top-level premium flags
-            jsonData.isPremium = true;
-            jsonData.isSubscribed = true;
-            jsonData.packageType = 'premium';
-            modified = true;
-
-            if (modified) {
-                data = JSON.stringify(jsonData);
-                console.log("✅ Response modified successfully!");
-            }
-
-        } catch (e) {
-            // Not JSON — ignore
-            console.log("⚠️ Response not JSON");
-        }
-
-        // 🔥 Response headers copy
-        response.headers.forEach((value, key) => {
-            if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
-                res.setHeader(key, value);
-            }
-        });
-
-        console.log("✅ Status:", response.status);
-        return res.status(response.status).send(data);
-
-    } catch (error) {
-        console.error("❌ Error:", error);
-        return res.status(500).json({
-            status: false,
-            error: "Proxy Error: " + error.message
-        });
-    }
+    const body = await upstream.arrayBuffer();
+    return res.status(upstream.status).send(Buffer.from(body));
+  } catch (error) {
+    console.error("Proxy error:", error);
+    return res.status(502).json({
+      status: false,
+      error: "Upstream authentication service unavailable"
+    });
+  }
 }
