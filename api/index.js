@@ -1,5 +1,5 @@
 // ==========================================
-// 📡 ALRIGHT TV PROXY — SIMPLE FORWARD (NO BLOCK)
+// 📡 ALRIGHT TV PROXY — WITH PREMIUM TOKEN
 // ==========================================
 
 const BASE_URL = "https://alright-prod-b4argqfwfdfpezfc.centralindia-01.azurewebsites.net";
@@ -7,38 +7,13 @@ const BASE_URL = "https://alright-prod-b4argqfwfdfpezfc.centralindia-01.azureweb
 // 🔥 TERA PREMIUM TOKEN
 const PREMIUM_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjI0N2Y4MDYwMDM5YjVmNDBkOTQ5NjkzOGJiMTg5NzA2ZWY4ODkzM2QiLCJ0eXAiOiJKV1QifQ.eyJsb2dpblR5cGUiOjAsInVzZXJJZCI6IjZhNzMxMGNkNzJhNDhlZjkxYmJmOWE3NSIsInBob25lVmVyaWZpZWQiOnRydWUsInBob25lX251bWJlciI6Iis5MTkyMDUyMzEwNDIiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vYWxyaWdodC0zYWRmZCIsImF1ZCI6ImFscmlnaHQtM2FkZmQiLCJhdXRoX3RpbWUiOjE3ODg1OTUwMDEsInVzZXJfaWQiOiJNTy0zNTU2NDNmYTc3YWU0ZDVlYWI2NDdjYWMzYjRkZjAxNCIsInN1YiI6Ik1PLTM1NTY0M2ZhNzdhZTRkNWVhYjY0N2NhYzNiNGRmMDE0IiwiaWF0IjoxNzg4NTk1MDAxLCJleHAiOjE3ODg1OTg2MDEsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnt9LCJzaWduX2luX3Byb3ZpZGVyIjoiY3VzdG9tIn19.NTogk3P0OAnfoZ4w9PyadnbeyuitdMXgddgJEcB1a4vhhUQly5iAQzKcrPndNHoVG2Zd12JFrM8WldOAgNMHW4TV4NqV2agkXH-QqlVppJHFQvVCcvE6n73i51ow0zmjYhOz3KCba2UWNdGmhERgxjOJRCRWmTawYs7Ys3kHTxSjpHOxCk4gEoNeeHe3Ix2sQUwXRSa69O1hJNtBpjKKagB8181ZOo05yNfnhgW77b3CxT6KXVwLhAky91QycWhluZXQenfAMI9bSEzaxJudsPN6h7n5Hq95dvDe8VSIOXpLq7fGK18SwsElg1LB6vl6IuRhOd85KsfnnFiwAFruIA";
 
-const PREMIUM_USER_ID = "6a7310cd72a48ef91bbf9a75";
-const PREMIUM_PHONE = "+919205231042";
-
-const INJECT_HEADERS = {
-    "key": "26a1d8b05105f27f943b088a6e8c9cf035bde8479c437c24277cbfd214c4135b",
-    "device-id": "9e9f95f096bd5c61",
-    "app-version": "29.1.0",
-    "platform": "android",
-    "iscore": "yes",
-    "accept": "application/json",
-    "content-type": "application/json",
-    "user-agent": "Dart/3.9 (dart:io)"
-};
-
-// 🔥 SIRF LOGIN ENDPOINTS — YAHAN TOKEN REPLACE KARNA HAI
-const LOGIN_ENDPOINTS = [
-    '/user/phone-otp/verify',
-    '/user/otpless-login',
-    '/user/firebase-login',
-    '/user/login'
-];
-
 export default async function handler(req, res) {
-    // 🔥 req.url se full path lo
     const url = new URL(req.url, `http://${req.headers.host}`);
     const fullPath = url.pathname + url.search;
-    const cleanPath = url.pathname;
     const method = req.method;
 
-    console.log("📥", method, cleanPath);
+    console.log("📥", method, fullPath);
 
-    // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', '*');
@@ -50,7 +25,6 @@ export default async function handler(req, res) {
     try {
         const headers = {};
 
-        // Original headers copy
         if (req.headers) {
             Object.keys(req.headers).forEach(key => {
                 const lowerKey = key.toLowerCase();
@@ -60,12 +34,17 @@ export default async function handler(req, res) {
             });
         }
 
-        // 🔥 Inject hardcoded headers
-        Object.keys(INJECT_HEADERS).forEach(key => {
-            headers[key] = INJECT_HEADERS[key];
-        });
+        // 🔥 Essential headers
+        headers['key'] = '26a1d8b05105f27f943b088a6e8c9cf035bde8479c437c24277cbfd214c4135b';
+        headers['device-id'] = '9e9f95f096bd5c61';
+        headers['app-version'] = '29.1.0';
+        headers['platform'] = 'android';
+        headers['iscore'] = 'yes';
+        headers['accept'] = 'application/json';
+        headers['content-type'] = 'application/json';
+        headers['user-agent'] = 'Dart/3.9 (dart:io)';
 
-        // 🔥 HAR REQUEST MEIN PREMIUM TOKEN INJECT
+        // 🔥🔥🔥 HAR REQUEST MEIN PREMIUM TOKEN INJECT
         headers['authorization'] = PREMIUM_TOKEN;
 
         delete headers['accept-encoding'];
@@ -86,80 +65,11 @@ export default async function handler(req, res) {
             }
         }
 
-        // 🎯 TARGET URL
         const targetUrl = BASE_URL + fullPath;
         console.log("🚀 Target:", targetUrl);
 
         const response = await fetch(targetUrl, fetchOptions);
-        let data = await response.text();
-
-        // 🔥 SIRF LOGIN RESPONSE MEIN TOKEN REPLACE KARO
-        const isLogin = LOGIN_ENDPOINTS.some(e => cleanPath.includes(e));
-
-        if (isLogin) {
-            console.log("🔐 Login Response — Replacing Token");
-            try {
-                let jsonData = JSON.parse(data);
-                let modified = false;
-
-                // Token replace
-                if (jsonData.token) {
-                    jsonData.token = PREMIUM_TOKEN;
-                    modified = true;
-                }
-                if (jsonData.idToken) {
-                    jsonData.idToken = PREMIUM_TOKEN;
-                    modified = true;
-                }
-                if (jsonData.accessToken) {
-                    jsonData.accessToken = PREMIUM_TOKEN;
-                    modified = true;
-                }
-                if (jsonData.firebaseToken) {
-                    jsonData.firebaseToken = PREMIUM_TOKEN;
-                    modified = true;
-                }
-
-                // User ID replace
-                if (jsonData.userId) {
-                    jsonData.userId = PREMIUM_USER_ID;
-                    modified = true;
-                }
-                if (jsonData.user && jsonData.user.id) {
-                    jsonData.user.id = PREMIUM_USER_ID;
-                    modified = true;
-                }
-
-                // Phone replace
-                if (jsonData.phoneNumber) {
-                    jsonData.phoneNumber = PREMIUM_PHONE;
-                    modified = true;
-                }
-                if (jsonData.user && jsonData.user.phoneNumber) {
-                    jsonData.user.phoneNumber = PREMIUM_PHONE;
-                    modified = true;
-                }
-
-                // Premium status
-                if (jsonData.user) {
-                    jsonData.user.isSubscribed = true;
-                    jsonData.user.subscriptionStatus = 'active';
-                    jsonData.user.packageType = 'premium';
-                    jsonData.user.validity = 'Lifetime Unlimited';
-                    modified = true;
-                }
-
-                jsonData.isPremium = true;
-                jsonData.isSubscribed = true;
-
-                if (modified) {
-                    data = JSON.stringify(jsonData);
-                    console.log("✅ Login Response Modified!");
-                }
-            } catch (e) {
-                console.log("⚠️ Not JSON");
-            }
-        }
+        const data = await response.text();
 
         response.headers.forEach((value, key) => {
             if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key)) {
